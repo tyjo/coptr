@@ -9,8 +9,8 @@ version: 2
 sphinx:
   configuration: docs/conf.py
 
-conda:
-  environment: coptr-env.yml
+python:
+  version: 3.6
 
 # Optionally set the version of Python and requirements required to build your docs
 # python:
