@@ -22,7 +22,8 @@ class ProgramOptions:
 
 command: index            create a bowtie2 index for a reference database
          map              map reads against a reference database
-         extract          extract read positions from bam files
+         extract          compute coverage maps from bam files
+         estimate         estimate PTRs from coverage maps
 '''
         )
 
