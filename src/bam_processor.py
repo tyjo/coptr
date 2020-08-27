@@ -224,7 +224,7 @@ class BamProcessor:
                     CoverageMapContig(bam_file, genome_id, contig_read_positions[genome_id], contig_lengths[genome_id])
             else:
                 coverage_maps[genome_id] = \
-                    CoverageMapRef(bam_file, genome_id, contig_read_positions[genome_id], contig_lengths[genome_id])
+                    CoverageMapRef(bam_file, genome_id, contig_read_positions[genome_id][genome_id], contig_lengths[genome_id][genome_id])
 
         return coverage_maps
 
@@ -269,7 +269,6 @@ class CoverageMapRef(CoverageMap):
     def __init__(self, bam_file, genome_id, read_positions, length):
         super().__init__(bam_file, genome_id, is_assembly=False)
         self.read_positions = read_positions
-        self.passed_qc_flag = None
         self.length = length
 
 

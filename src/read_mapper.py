@@ -12,6 +12,7 @@ import subprocess as sub
 import sys
 
 from src.print import print_error, print_info
+from src.util import get_fastq_name
 
 class ReadMapper:
     """Wrapper around bowtie2.
@@ -110,8 +111,8 @@ class ReadMapper:
                     if ext1 in valid_ext or ext2 in valid_ext:
                         bn = os.path.basename(f)
                         bn,ext = os.path.splitext(bn)
-                        out_sam = os.path.join(outfolder, bn + ".sam")
-                        out_bam = os.path.join(outfolder, bn + ".bam")
+                        out_sam = os.path.join(outfolder, get_fastq_name(f) + ".sam")
+                        out_bam = os.path.join(outfolder, get_fastq_name(f) + ".bam")
 
                         # map reads with bowtie2
                         print_info("ReadMapper", "mapping {} to {}".format(fpath, out_sam))

@@ -1,12 +1,14 @@
 import argparse
 import os
 import os.path
+import pickle as pkl
 import sys
 
 from src.bam_processor import BamProcessor, CoverageMapRef, CoverageMapContig
+from src.coptr_ref import estimate_ptrs_coptr_ref
 from src.print import print_error, print_info
 from src.read_mapper import ReadMapper
-
+from src.util import get_fastq_name
 
 
 class ProgramOptions:
@@ -37,12 +39,12 @@ command: index            create a bowtie2 index for a reference database
 
     def index(self):
         parser = argparse.ArgumentParser(usage="coptr.py index [-h] ref-fasta index-out")
-        parser.add_argument("ref-fasta", help=
+        parser.add_argument("ref_fasta", help=
 '''File or folder containing fasta to index. If a folder, the extension for each
 fasta must be one of [.fasta, .fna, .fa]
 '''
         )
-        parser.add_argument("index-out", help="Filepath to store index.")
+        parser.add_argument("index_out", help="Filepath to store index.")
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -61,7 +63,7 @@ fasta must be one of [.fasta, .fna, .fa]
 each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 '''
         )
-        parser.add_argument("out-folder",
+        parser.add_argument("out_folder",
             help="Folder to save mapped reads. BAM files are output here."
         )
         parser.add_argument("--threads", type=int, default=1, 
@@ -81,15 +83,17 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
     def extract(self):
         parser = argparse.ArgumentParser(usage=
 '''usage: coptr.py extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex]
-                in-folder
+                in-folder out-folder
 '''
         )
-        parser.add_argument("in-folder", help="Folder with BAM files.")
-        parser.add_argument("out-folder", help="Folder to store coverage maps.")
+        parser.add_argument("in_folder", help="Folder with BAM files.")
+        parser.add_argument("out_folder", help="Folder to store coverage maps.")
         parser.add_argument("--ref-genome-regex", default="\w+\|\d+",
             help="Regular expression extracting a reference genome id from the sequence id in a bam file.",
         )
-        parser.add_argument("--check-regex", action="store_true", default=False)
+        parser.add_argument("--check-regex", action="store_true", default=False,
+            help="Check the regular expression by counting reference genomes without processing."
+        )
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -113,12 +117,54 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                 if args.check_regex:
                     continue
 
-                bam_processor.process_bam(fpath)
+                coverage_maps = bam_processor.process_bam(fpath)
+                pkl.dump(coverage_maps, open(os.path.join(args.out_folder, get_fastq_name(f) + ".cm.pkl"), "wb"))
 
         print_info("BamProcessor", "found {} reference sequences corresponding to {} genomes".format(len(ref_sequences), len(ref_genomes)))
-        #coverage_maps = bam_processorlen
+        if args.check_regex:
+            print_info("BamProcessor", "reference genome ids:")
+            for ref in sorted(ref_genomes):
+                print("\t", ref, file=sys.stderr)
 
 
+    def estimate(self):
+        parser = argparse.ArgumentParser(usage=
+'''usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] coverage-map-folder out-file
+'''
+        )
+        parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
+        parser.add_argument("out_file", help="Filename to store PTR table.")
+        parser.add_argument("--min-reads", type=float, help="Minimum number of reads required to compute a PTR (default 5000).", default=5000)
+        parser.add_argument("--min-cov", type=float, help="Fraction of nonzero 10Kb bins required to compute a PTR (default 0.75).", default=0.75)
+        parser.add_argument("--threads", type=int, help="Number of threads to use (default 1).", default=1)
+
+        if len(sys.argv[2:]) < 1:
+            parser.print_help()
+            exit(1)
+
+        args = parser.parse_args(sys.argv[2:])
+        # reference genome id -> list of coverage maps
+        coverage_maps_ref = {}
+        coverage_maps_contig = {}
+
+        for f in os.listdir(args.coverage_map_folder):
+            fname, ext = os.path.splitext(f)
+            if ext == ".pkl":
+                fpath = os.path.join(args.coverage_map_folder, f)
+                coverage_maps = pkl.load(open(fpath, "rb"))
+
+                # split into maps from assemblies and compete reference genomes
+                for ref_id in coverage_maps:
+                    if not coverage_maps[ref_id].is_assembly and ref_id not in coverage_maps_ref:
+                        coverage_maps_ref[ref_id] = [coverage_maps[ref_id]]
+                    elif not coverage_maps[ref_id].is_assembly:
+                        coverage_maps_ref[ref_id].append(coverage_maps[ref_id])
+                    elif coverage_maps[ref_id].is_assembly and ref_id not in coverage_maps_contig:
+                        coverage_maps_contig[ref_id] = [coverage_maps[ref_id]]
+                    else:
+                        coverage_maps_contig[ref_id].append(coverage_maps[ref_id])
+
+        results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, threads=args.threads)
 
 
 if __name__ == "__main__":
