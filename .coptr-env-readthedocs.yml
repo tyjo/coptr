@@ -1,0 +1,16 @@
+name: coptr
+channels:
+  - anaconda
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - sphinx=3.2.1=py_0
+  - sphinx_rtd_theme=0.4.3=py_0
+  - sphinxcontrib-applehelp=1.0.2=py_0
+  - sphinxcontrib-devhelp=1.0.2=py_0
+  - sphinxcontrib-htmlhelp=1.0.3=py_0
+  - sphinxcontrib-jsmath=1.0.1=py_0
+  - sphinxcontrib-qthelp=1.0.3=py_0
+  - sphinxcontrib-serializinghtml=1.1.4=py_0
+prefix: /Users/tylerjoseph/anaconda3/envs/coptr
