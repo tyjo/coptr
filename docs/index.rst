@@ -15,7 +15,7 @@ Quick Start
 
 2. Map reads:
 
-    ``coptr.py map example-data/ref-db/example-index example-data/ example-data/bam``
+    ``coptr.py map example-data/ref-db/example-index example-data/fastq example-data/bam``
 
 3. Extract read positions:
 
@@ -23,7 +23,7 @@ Quick Start
 
 4. Estimate PTRs:
 
-    ``coptr.py estimate coverage-maps``
+    ``coptr.py estimate example-data/coverage-maps out --min-reads 2500``
 
 .. toctree::
    :maxdepth: 2

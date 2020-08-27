@@ -1,3 +1,9 @@
+"""
+util.py
+===============================
+Miscellaneous utility functions.
+"""
+
 import os.path
 
 def get_fastq_name(fpath):

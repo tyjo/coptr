@@ -5,6 +5,7 @@ Extract coordinates along each reference sequence and group reference
 sequences by genome.
 """
 
+import math
 import numpy as np
 import os.path
 import pysam
@@ -321,6 +322,13 @@ class CoverageMapContig(CoverageMap):
         self.contig_lengths = contig_lengths
 
         self.binned_reads = {}
+        # total number of 10Kb bins
+        self.total_bins = None
+        # fraction with nonzero read count
+        self.frac_nonzero = None
+        # total reads prefiltering
+        self.reads = None
+        # flag for qc check
         self.passed_qc_flag = None
 
 
@@ -358,54 +366,59 @@ class CoverageMapContig(CoverageMap):
         return reads
 
 
-    # def bin_reads_10Kb(self, contig_id):
-    #     """Count reads in 10Kb windows.
+    def bin_reads_10Kb(self, contig_id):
+        """Count reads in 10Kb windows.
 
-    #     Parameters
-    #     ----------
-    #         contig_id : str
-    #             Reference sequence id of the contig
+        Parameters
+        ----------
+            contig_id : str
+                Reference sequence id of the contig
 
-    #     Returns
-    #     -------
-    #         binned_reads : numpy.array
-    #             Total number of reads in each 10Kb window
-    #     """
-    #     bin_size = 10000
-    #     contig_length = self.contig_lengths[contig_id]
+        Returns
+        -------
+            binned_reads : numpy.array
+                Total number of reads in each 10Kb window
+        """
+        bin_size = 10000
+        contig_length = self.contig_lengths[contig_id]
 
-    #     if contig_id not in self.binned_reads:
-    #         binned_counts = []
+        if contig_id not in self.binned_reads:
+            binned_counts = []
 
-    #         nbins = int(math.floor(contig_length / bin_size))
-    #         bin_counts = np.zeros(nbins)
+            nbins = int(math.floor(contig_length / bin_size))
+            bin_counts = np.zeros(nbins)
 
-    #         for r in self.contig_read_positions[contig_id]:
-    #             rbin = int(math.floor(nbins * r / contig_length))
-    #             bin_counts[rbin] += 1
+            for r in self.contig_read_positions[contig_id]:
+                rbin = int(math.floor(nbins * r / contig_length))
+                bin_counts[rbin] += 1
 
-    #         self.binned_reads[contig_id] = bin_counts
+            self.binned_reads[contig_id] = bin_counts
 
-    #     return self.binned_reads[contig_id]
+        return self.binned_reads[contig_id]
 
 
-    # def passed_qc(self):
-    #     """Run basic quality control checks. Sets the passed_gc_flag attribute.
-    #     """
-    #     if self.passed_qc_flag is not None:
-    #         return self.passed_qc_flag
-    #     total_bins = 0
-    #     zero_bins = 0
-    #     for cid in self.contig_ids:
-    #         length = self.contig_lengths[cid]
-    #         if length < 11000: continue
-    #         bins = self.bin_reads_10Kb(cid)
-    #         total_bins += bins.size
-    #         zero_bins = (bins == 0).sum()
+    def passed_qc(self):
+        """Run basic quality control checks. Sets the passed_gc_flag attribute.
+        """
+        if self.passed_qc_flag is not None:
+            return self.passed_qc_flag
+        total_bins = 0
+        total_reads = 0
+        zero_bins = 0
+        for cid in self.contig_ids:
+            length = self.contig_lengths[cid]
+            if length < 11000: continue
+            bins = self.bin_reads_10Kb(cid)
+            total_bins += bins.size
+            total_reads += bins.sum()
+            zero_bins += (bins == 0).sum()
 
-    #     if zero_bins / total_bins > 0.5 and total_bins > 50:
-    #         self.passed_qc_flag = False
-    #     else:
-    #         self.passed_qc_flag = True
+        if zero_bins / total_bins > 0.5 and total_bins > 50:
+            self.passed_qc_flag = False
+        else:
+            self.passed_qc_flag = True
 
-    #     return self.passed_qc_flag
+        self.frac_nonzero = zero_bins / total_bins
+        self.reads  = total_reads
+        self.total_bins = total_bins
+        return self.passed_qc_flag

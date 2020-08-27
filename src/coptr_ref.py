@@ -1,3 +1,8 @@
+"""
+coptr_ref.py
+======================
+Estimate peak-to-trough ratios using complete reference genomes.
+"""
 import math
 import multiprocessing as mp
 import numpy as np
@@ -29,7 +34,19 @@ class QCResult:
 
 class ReadFilterRef:
     """Read filtering steps for CoPTR Ref.
+
+    Parameters
+    ----------
+        min_reads : float
+            Minumum read count after filtering
+        frac_nonzero : float
+            Fraction of nonzero 10Kb bins required
     """
+
+    def __init__(self, min_reads, min_cov):
+        self.min_reads = min_reads
+        self.min_cov = min_cov
+
 
     def filter_reads(self, read_positions, genome_length):
         """Filter out reads in regions of the genome where the coverage
@@ -54,13 +71,12 @@ class ReadFilterRef:
         read_positions = np.copy(read_positions)
         read_positions, genome_length = self.filter_reads_phase1(read_positions, genome_length)
         filtered_read_positions, filtered_genome_length = self.filter_reads_phase2(read_positions, genome_length)
-        qc_result = self.quality_check(filtered_read_positions, filtered_genome_length)
+        qc_result = self.quality_check(filtered_read_positions, filtered_genome_length, self.min_reads, self.min_cov)
         return filtered_read_positions, filtered_genome_length, qc_result
 
 
-    def quality_check(self, filtered_read_positions, filtered_genome_length, frac_nonzero=0.75, min_reads=5000):
-        """A basic quality check for required coverage of a genome in a
-        sample.
+    def quality_check(self, filtered_read_positions, filtered_genome_length, min_reads, frac_nonzero):
+        """A basic quality check for required coverage of a genome in a sample.
 
         Parameters
         ----------
@@ -69,10 +85,10 @@ class ReadFilterRef:
                 after filtering
             filtered_genome_length : float
                 The length of the reference genome after filtering
-            frac_nonzero : float
-                Fraction of nonzero 10Kb bins required
             min_reads : float
                 Minumum read count after filtering
+            frac_nonzero : float
+                Fraction of nonzero 10Kb bins required
 
         Returns
         -------
@@ -409,7 +425,19 @@ class CoPTRRefEstimate:
 
 class CoPTRRef:
     """CoPTR estimator for complete reference genomes.
+
+    Parameters
+    ----------
+        min_reads : float
+            Minumum read count after filtering to estimate PTR
+        frac_nonzero : float
+            Fraction of nonzero 10Kb bins required to estimate PTR
     """
+
+    def __init__(self, min_reads, min_cov):
+        self.min_reads = min_reads
+        self.min_cov = min_cov
+
 
     def compute_log_likelihood(self, ori_loc, ter_loc, log2_ptr, read_locs):
         """Model log-likelihood for one sample.
@@ -485,7 +513,7 @@ class CoPTRRef:
             log_lk : float
                 The model log likelihood
         """
-        rf = ReadFilterRef()
+        rf = ReadFilterRef(self.min_reads, self.min_cov)
         read_positions, ref_genome_len, qc_result = rf.filter_reads(read_positions, ref_genome_len)
         if not qc_result.passed_qc:
             return np.nan, np.nan, np.nan, np.nan, qc_result
@@ -543,7 +571,7 @@ class CoPTRRef:
         
 
 
-def estimate_ptrs_coptr_ref(coverage_maps, threads):
+def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads):
     """Estimate Peak-to-Trough ratios across samples.
 
     Parameters
@@ -551,20 +579,33 @@ def estimate_ptrs_coptr_ref(coverage_maps, threads):
         coverage_maps : dict[str -> list[CoverageMap]]
             A dictionary with key reference genome id and value
             a list of coverage maps for that reference genome
+        min_reads : float
+            Minumum read count after filtering to estimate PTR
+        frac_nonzero : float
+            Fraction of nonzero 10Kb bins required to estimate PTR
+        threads : int
+            Number of threads for parallel computation
 
     Returns
     -------
         coptr_ref_estimates : dict[str -> list[CoPTRefEstimate]]
             A dictionary with key reference genome id and value
-            a list of CoPTRRefEstimate for that refercen genome.
+            a list of CoPTRRefEstimate for that reference genome.
     """
     # workers for multiprocessing
     pool = mp.Pool(threads)
     coptr_ref_estimates = {}
-    coptr_ref = CoPTRRef()
+    coptr_ref = CoPTRRef(min_reads, min_cov)
 
     for ref_id in coverage_maps:
         print_info("CoPTRRef", "estimating PTRs for {}".format(ref_id))
-        coptr_ref_estimates[ref_id] =  pool.map(coptr_ref._parallel_helper, [ (sample.read_positions, sample.length, sample.bam_file, sample.genome_id, sample.sample_id) for sample in coverage_maps[ref_id]])
 
+        if threads > 1:
+            coptr_ref_estimates[ref_id] =  pool.map(coptr_ref._parallel_helper, [ (sample.read_positions, sample.length, sample.bam_file, sample.genome_id, sample.sample_id) for sample in coverage_maps[ref_id]])
+        else:
+            coptr_ref_estimates[ref_id] = []
+            for sample in coverage_maps[ref_id]:
+                log2_ptr, ori, ter, log_lk, qc_result = coptr_ref.estimate_ptr(sample.read_positions, sample.length)
+                est = CoPTRRefEstimate(sample.bam_file, sample.genome_id, sample.sample_id, log2_ptr, qc_result.nreads, qc_result.frac_nonzero)
+                coptr_ref_estimates[ref_id].append(est)
     return coptr_ref_estimates

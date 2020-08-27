@@ -1,3 +1,9 @@
+"""
+print.py
+======================
+Print error, warning, and info messages.
+"""
+
 import sys
 import time
 

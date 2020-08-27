@@ -1,10 +1,12 @@
 import argparse
+import numpy as np
 import os
 import os.path
 import pickle as pkl
 import sys
 
 from src.bam_processor import BamProcessor, CoverageMapRef, CoverageMapContig
+from src.coptr_contig import estimate_ptrs_coptr_contig
 from src.coptr_ref import estimate_ptrs_coptr_ref
 from src.print import print_error, print_info
 from src.read_mapper import ReadMapper
@@ -136,6 +138,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("out_file", help="Filename to store PTR table.")
         parser.add_argument("--min-reads", type=float, help="Minimum number of reads required to compute a PTR (default 5000).", default=5000)
         parser.add_argument("--min-cov", type=float, help="Fraction of nonzero 10Kb bins required to compute a PTR (default 0.75).", default=0.75)
+        parser.add_argument("--min-samples", type=float, help="CoPTRContig only. Minimum number of samples required to reorder bins (default 5).", default=5)
         parser.add_argument("--threads", type=int, help="Number of threads to use (default 1).", default=1)
 
         if len(sys.argv[2:]) < 1:
@@ -146,6 +149,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         # reference genome id -> list of coverage maps
         coverage_maps_ref = {}
         coverage_maps_contig = {}
+        sample_ids = set()
 
         for f in os.listdir(args.coverage_map_folder):
             fname, ext = os.path.splitext(f)
@@ -163,9 +167,40 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                         coverage_maps_contig[ref_id] = [coverage_maps[ref_id]]
                     else:
                         coverage_maps_contig[ref_id].append(coverage_maps[ref_id])
+                    sample_ids.add(coverage_maps[ref_id].sample_id)
 
-        results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, threads=args.threads)
+        sample_ids = sorted(list(sample_ids))
+        results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, args.min_reads, args.min_cov, threads=args.threads)
+        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads)
 
+        with open(args.out_file, "w") as f:
+            # write the header
+            f.write("genome_id/sample_id")
+            for sample_id in sample_ids:
+                f.write(",{}".format(sample_id))
+            f.write("\n")
+
+            for genome_id in sorted(results_ref):
+                f.write(genome_id)
+                for idx,result in enumerate(sorted(results_ref[genome_id], key=lambda x: x.sample_id)):
+                    if result.sample_id != sample_ids[idx]:
+                        print_error("Main", "{} is missing from {}".format(sample_id, result.ref_genome))
+                    if not np.isnan(result.estimate):
+                        f.write(",{}".format(result.estimate))
+                    else:
+                        f.write(",NA".format(result.estimate))
+                f.write("\n")
+
+            for genome_id in sorted(results_contig):
+                f.write(genome_id)
+                for idx,result in enumerate(sorted(results_contig[genome_id], key=lambda x: x.sample_id)):
+                    if result.sample_id != sample_ids[idx]:
+                        print_error("Main", "{} is missing from {}".format(sample_id, result.ref_genome))
+                    if not np.isnan(result.estimate):
+                        f.write(",{}".format(result.estimate))
+                    else:
+                        f.write(",NA".format(result.estimate))
+                f.write("\n")   
 
 if __name__ == "__main__":
     ProgramOptions()
