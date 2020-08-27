@@ -1,5 +1,5 @@
 """
-coptr_ref.py
+coptr_contig.py
 ======================
 Estimate peak-to-trough ratios from assemblies.
 """
