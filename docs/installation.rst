@@ -21,7 +21,7 @@ You can then create a new environment to run coPTR:
       $ conda env create -f coptr-env.yml
 
       # you only need to create this once
-      # to restore the environment from a new session
+      # to activate the environment:
       $ conda activate coptr
 
 To check if you can run coPTR:

@@ -11,6 +11,10 @@ For instructions on installation and environment set up, please see :doc:`Instal
 
       git clone https://github.com/tyjo/coptr
       cd coptr
+
+      # Set up the environment:
+      conda env create -f coptr-env.yml
+      conda activate coptr
       
       # Index the reference database:
       python coptr.py index example-data/ref-db example-data/ref-db/example-index
