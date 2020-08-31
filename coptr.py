@@ -85,8 +85,8 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
     def extract(self):
         parser = argparse.ArgumentParser(usage=
-'''usage: coptr.py extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex]
-                in-folder out-folder
+'''coptr.py extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex]
+            in-folder out-folder
 '''
         )
         parser.add_argument("in_folder", help="Folder with BAM files.")
