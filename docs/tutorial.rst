@@ -36,7 +36,6 @@ to be correct. We set some basic criteria for using an assembly:
 * It is estimated to have <5% contamination
 * It has an N50 > 10kb
 * It has an average contig length > 10kb
-* It has fewer than 400 contigs
 
 The first two criteria are similar to the MIMAG criteria for high-quality
 assemblies.
@@ -44,13 +43,6 @@ assemblies.
 When choosing between an assembly, and complete reference genome, preference
 should always be given to the complete genome.
 
-Nomenclature for reference genomes
-----------------------------------
-coPTR needs to be able to group contigs by their assembly. It is recommended
-to choose a consistent naming convention for all contigs. For example,
-``REF-ID-FOR-ASSEMBLY-1:CONTIG-ID-1``. When mapping reads against the reference
-database (see below), you can provide an argument that maps the id of the contig to
-its reference genome.
 
 
 Indexing the reference database
@@ -61,32 +53,60 @@ Indexing the reference database
 .. code-block:: text
 
     $ python coptr.py index example-data/ref-db example-data/ref-db/example-index
-    [INFO] (Aug 31, 2020 12:09:50) ReadMapper: bowtie2-build example-data/ref-db/e-coli-mag.fna,example-data/ref-db/l-gasseri-ref.fa, example-data/example-index
+    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: found 2 files totaling 0.006 Gb
+    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: copying to fasta files to coptr-fna-1599775601.629647.fna with prepended genome ids (filenames)
+    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: writing 2 reference genome ids to example-data/ref-db/example-index.genomes
+    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: bowtie2-build coptr-fna-1599775601.629647.fna example-data/ref-db/example-index --noref --threads 1
     ...bowtie2 output...
-    [INFO] (Aug 31, 2020 12:09:53) ReadMapper: indexed 2 fasta files for reference database.
+    [INFO] (Sep 10, 2020 18:06:44) ReadMapper: indexed 2 fasta files for reference database.
+    [INFO] (Sep 10, 2020 18:06:44) ReadMapper: cleaning up coptr-fna-1599775601.629647.fna
+
 
 
 
 coPTR provides a few utilities to make indexing the database with bowtie2
-easier. Indexing a database of fasta files can be accomplished by calling
+easier. It assumes the reference database is provided by a folder of fasta
+files, one per reference genome.
+
+Indexing a database of fasta files can be accomplished by calling
 ``coptr.py index``:
 
 .. code-block:: text
 
-    usage: coptr.py index [-h] ref-fasta index-out
+    usage: coptr.py index [-h] [--bt2-bmax BT2_BMAX] [--bt2-dcv BT2_DCV] [--bt2-threads BT2_THREADS] [--bt2-packed] ref-fasta index-out
 
     positional arguments:
-      ref_fasta   File or folder containing fasta to index. If a folder, the
-                  extension for each fasta must be one of [.fasta, .fna, .fa]
-      index_out   Filepath to store index.
+      ref_fasta             File or folder containing fasta to index. If a folder,
+                            the extension for each fasta must be one of [.fasta,
+                            .fna, .fa]
+      index_out             Filepath to store index.
 
     optional arguments:
-      -h, --help  show this help message and exit
+      -h, --help            show this help message and exit
+      --bt2-bmax BT2_BMAX   Set the --bmax arguement for bowtie2-build. Used to
+                            control memory useage.
+      --bt2-dcv BT2_DCV     Set the --dcv argument for bowtie2-build. Used to
+                            control memory usage.
+      --bt2-threads BT2_THREADS
+                            Number of threads to pass to bowtie2-build.
+      --bt2-packed          Set the --packed flag for bowtie2-build. Used to
+                            control memory usage.
 
 It takes two arguments. The first ``ref-fasta`` is either a folder containing
 fasta for the database. If it is a folder, coPTR will scan the folder for
-all files ending in ``.fasta``, ``.fna``, or ``.fa``, and call ``bowtie2 index``
-on these files. If it is a file, coPTR will index the single file.
+all files ending in ``.fasta``, ``.fna``, or ``.fa``. coPTR will combine these
+into a single fasta file, prepending the filename to each sequence id in order
+to track contigs from the same reference genome. It then calls the ```bowtie2-build```
+to index this file.
+
+coPTR additionally outputs an ```index_name.genomes``` file with a list of ids for each
+reference genome.
+
+Notes on memory usage
+---------------------
+For large databases, the options ```--bt2-bmax```, ```--bt2-dcv```, and ```--bt2-packed```
+can reduce memory usage. Please see the `bowtie2 manual <http://bowtie-bio.sourceforge.net/bowtie2/manual.shtml#the-bowtie2-build-indexer>`_ for more details.
+
 
 Mapping reads
 =============
@@ -184,39 +204,10 @@ assembly are collected.
                             genomes without processing
 
 The important argument here is the ``--ref-genome-regex``. This is a regular
-expression that matches the reference genome id from a sequence id. For example,
-consider the sequence id
-
-``REF-ID-FOR-ASSEMBLY-1:CONTIG-ID-1``
-
-The sequence id for the fasta would look something like
-
-``>REF-ID-FOR-ASSEMBLY-1:CONTIG-ID-1 [other data that is not parsed]``
-
-and the reference genome id is ``REF-ID-FOR-ASSEMBLY-1``.
-
-We would want to the regular expression to match ``REF-ID-FOR-ASSEMBLY-1``. This
-is straightforward if you use a single special character (such as :) to separate
-reference genome ids from contig ids. In this case, the right regex is
-
-``[\w-]+``
-
-which matches one or more word characters or "-" characters in a row. If no
-matches are found, coPTR defaults to using the sequence id itself as the reference
-genome id.
-
-The optional flag ``--check-regex`` allows you to sanity check your regular
-expressions. It outputs the total number of reference genomes found and
-their reference ids. On the example data:
-
-.. code-block:: text
-
-    $ python coptr.py extract example-data/bam example-data/coverage-maps --check-regex
-    [INFO] (Aug 31, 2020 12:25:32) BamProcessor: found 190 reference sequences corresponding to 2 genomes
-    [INFO] (Aug 31, 2020 12:25:32) BamProcessor: reference genome ids:
-         ERS235517|65
-         NC_008530.1
-
+expression that extracts the reference genome id from a sequence id. The default
+argument will work with the index created by ```coptr.py index```, and works by
+prepending the name of the fasta file, and special character ```|``` to each
+sequence id.
 
 
 Estimating PTRs

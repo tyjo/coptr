@@ -46,7 +46,7 @@ class BamProcessor:
         right reference genome id.
     """
 
-    def __init__(self, regex="\w+\|\d+"):
+    def __init__(self, regex):
         self.regex = regex
         self.min_avg_qual = 30
 
@@ -224,8 +224,9 @@ class BamProcessor:
                 coverage_maps[genome_id] = \
                     CoverageMapContig(bam_file, genome_id, contig_read_positions[genome_id], contig_lengths[genome_id])
             else:
+                ref_id = list(contig_read_positions[genome_id].keys())[0]
                 coverage_maps[genome_id] = \
-                    CoverageMapRef(bam_file, genome_id, contig_read_positions[genome_id][genome_id], contig_lengths[genome_id][genome_id])
+                    CoverageMapRef(bam_file, genome_id, contig_read_positions[genome_id][ref_id], contig_lengths[genome_id][ref_id])
 
         return coverage_maps
 

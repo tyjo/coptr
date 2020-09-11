@@ -10,6 +10,7 @@ import os.path
 import pysam
 import subprocess as sub
 import sys
+import time
 
 from src.print import print_error, print_info
 from src.util import get_fastq_name
@@ -18,7 +19,7 @@ class ReadMapper:
     """Wrapper around bowtie2.
     """
 
-    def index(self, ref_fasta, index_out):
+    def index(self, ref_fasta, index_out, bt2_bmax, bt2_dcv, bt2_threads, bt2_packed):
         """Build a bowtie2 index from ref_fasta.
 
         Parameters
@@ -28,31 +29,82 @@ class ReadMapper:
                 Valid extensions include '.fasta', '.fna', '.fa'
             index_out : str
                 Path to output the index.
+            bt2_bmax : str
+                Parameter to pass to bowtie2-build --bmax argument.
+            bt2_dcv : str
+                Parameter to pass to bowtie2-build --dcv argument.
+            bt2_threads : str
+                Parameter to pass to bowtie2-build --threads argument.
+            bt2_packed : str
+                Parameter to pass to bowtie2-build --packed argument.
         """
         if os.path.isfile(ref_fasta):
-            print_info("ReadMapper", "found 1 fasta file for reference database.")
-            call = ["bowtie2-build", ref_fasta, index_out]
-            print_info("ReadMapper", " ".join(call))
-            sub.check_call(call)
+            ref_files = [ref_fasta]
+            files_found = 1
+            total_size = os.stat(ref_fasta).st_size
         elif os.path.isdir(ref_fasta):
             valid_ext = [".fasta", ".fa", ".fna"]
             # for multiple fasta files, bowtie2 takes a comma
             # separated list
-            ref_files = ""
+            ref_files = []
             files_found = 0
+            total_size = 0
             for f in os.listdir(ref_fasta):
                 fname,ext = os.path.splitext(f)
                 fpath = os.path.join(ref_fasta,f)
+
                 if os.path.isfile(fpath) and ext in valid_ext:
-                    ref_files += fpath + ","
+                    ref_files.append(fpath)
+                    total_size += os.stat(fpath).st_size
                     files_found += 1
 
-            call = ["bowtie2-build", ref_files, index_out]
+        else:
+            print_error("ReadMapper", "index must either be file or folder.")
+
+
+        print_info("ReadMapper", "found {} files totaling {:.3f} Gb".format(len(ref_files), total_size / (1024**3)))
+
+        fna_out = open("coptr-fna-{}.fna".format(time.time()), "w")
+        genomes_out = open("{}.genomes".format(index_out), "w")
+        n_genomes = 0
+
+        print_info("ReadMapper", "copying to fasta files to {} with prepended genome ids (filenames)".format(fna_out.name))
+
+        # assume 1 genome per fasta
+        # let's set the filename as the genome identifier
+        for fpath in ref_files:
+            fname = os.path.basename(os.path.splitext(fpath)[0])
+            genomes_out.write(os.path.basename(fname) + "\n")
+            n_genomes += 1
+
+            with open(fpath, "r") as f:
+                for line in f:
+                    if ">" == line[0]:
+                        # prepend the filename as the identifier for the genome
+                        line = line[0] + fname + "|" + line[1:]
+                    fna_out.write(line)
+
+        fna_out.close()
+        genomes_out.close()
+
+        print_info("ReadMapper", "writing {} reference genome ids to {}".format(n_genomes, genomes_out.name))
+        call = ["bowtie2-build", fna_out.name, index_out, "--noref", "--threads", bt2_threads]
+        if bt2_bmax is not None:
+            call += ["--bmax", bt2_bmax]
+        if bt2_dcv is not None:
+            call += ["--dcv", bt2_dcv]
+        if bt2_packed:
+            call += ["--packed"]
+
+        try:
             print_info("ReadMapper", " ".join(call))
             sub.check_call(call)
             print_info("ReadMapper", "indexed {} fasta files for reference database.".format(files_found))
-        else:
-            print_error("ReadMapper", "index must either be file or folder.")
+        except Exception as e:
+            print(e, file=sys.stderr)
+        finally:
+            print_info("ReadMapper", "cleaning up {}".format(fna_out.name))
+            sub.check_call(["rm", fna_out.name])
 
 
     def map(self, index, inputf, outfolder, threads):

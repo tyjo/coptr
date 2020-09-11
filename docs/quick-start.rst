@@ -30,3 +30,5 @@ For instructions on installation and environment set up, please see :doc:`Instal
 
       # View the output:
       cat out
+
+See the :doc:`Tutorial <tutorial>` for more details.
