@@ -41,13 +41,17 @@ command: index            create a bowtie2 index for a reference database
 
 
     def index(self):
-        parser = argparse.ArgumentParser(usage="coptr.py index [-h] ref-fasta index-out")
+        parser = argparse.ArgumentParser(usage="coptr.py index [-h] [--bt2-bmax BT2_BMAX] [--bt2-dcv BT2_DCV] [--bt2-threads BT2_THREADS] [--bt2-packed] ref-fasta index-out")
         parser.add_argument("ref_fasta", help=
 '''File or folder containing fasta to index. If a folder, the extension for each
 fasta must be one of [.fasta, .fna, .fa]
 '''
         )
         parser.add_argument("index_out", help="Filepath to store index.")
+        parser.add_argument("--bt2-bmax", default=None, help="Set the --bmax arguement for bowtie2-build. Used to control memory useage.")
+        parser.add_argument("--bt2-dcv", default=None, help="Set the --dcv argument for bowtie2-build. Used to control memory usage.")
+        parser.add_argument("--bt2-threads", default="1", help="Number of threads to pass to bowtie2-build.")
+        parser.add_argument("--bt2-packed", action="store_true", help="Set the --packed flag for bowtie2-build. Used to control memory usage.")
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -55,7 +59,7 @@ fasta must be one of [.fasta, .fna, .fa]
 
         args = parser.parse_args(sys.argv[2:])
         read_mapper = ReadMapper()
-        read_mapper.index(args.ref_fasta, args.index_out)
+        read_mapper.index(args.ref_fasta, args.index_out, args.bt2_bmax, args.bt2_dcv, args.bt2_threads, args.bt2_packed)
 
 
     def map(self):
@@ -91,7 +95,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         )
         parser.add_argument("in_folder", help="Folder with BAM files.")
         parser.add_argument("out_folder", help="Folder to store coverage maps.")
-        parser.add_argument("--ref-genome-regex", default="\w+\|\d+",
+        parser.add_argument("--ref-genome-regex", default="[^\|]+",
             help="Regular expression extracting a reference genome id from the sequence id in a bam file.",
         )
         parser.add_argument("--check-regex", action="store_true", default=False,
