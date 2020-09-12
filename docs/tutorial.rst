@@ -27,8 +27,8 @@ ANI are consistent. This means you should cluster genomes by 95% ANI, an
 operational defintion of a species, and select one representative genome per
 species.
 
-Select only high-quality assemblies
------------------------------------
+Select only high-quality assemblies or complete genomes
+-------------------------------------------------------
 Metagenomic assembly is a challenging problem, and assemblies are not guaranteed
 to be correct. We set some basic criteria for using an assembly:
 
@@ -106,7 +106,8 @@ Notes on memory usage
 ---------------------
 For large databases, the options ```--bt2-bmax```, ```--bt2-dcv```, and ```--bt2-packed```
 can reduce memory usage. Please see the `bowtie2 manual <http://bowtie-bio.sourceforge.net/bowtie2/manual.shtml#the-bowtie2-build-indexer>`_ for more details.
-
+If these options still do not help, you can split the reference database into multiple
+parts, and index each separately. The resulting BAM files can be merged with ```coptr.py merge```.
 
 Mapping reads
 =============
@@ -158,12 +159,32 @@ It also takes an optional ``--threads`` argument that allows bowtie2 to use
 multiple threads. Reads are output as ``bam`` files to save space.
 
 
+Merging mapped reads from multiple indexes
+------------------------------------------
+For large reference databases, it is sometimes necessary to create several
+indexes for subsets of the data and map reads against each index. Results
+from each index need to be merged to select reads with the best MAPQ across
+indexes. You can use ```coptr.py merge``` to merge multiple bam files.
+
+.. code-block:: text
+
+    usage: coptr.py merge [-h] in-bam1 in-bam2 ... in-bamN out-bam
+
+    positional arguments:
+      in-bams     A space separateed list of BAM files to merge. Assumes same
+                  reads were mapped against different indexes.
+      out-bam     Path to merged BAM.
+
+    optional arguments:
+      -h, --help  show this help message and exit
+
+
 Note on paired end sequencing
 -----------------------------
 coPTR uses the density of reads along the genome to estimate PTRs. It
 uses the starting coordinate at each read to fit its model. Because
 mate pairs are not independent, once one read of the mate pair is observed
-the second read adds little information.
+the second read does not add any additional information.
 
 Therefore, we recommend using only **one mate pair from paired end sequencing**.
 The ``map`` command has been designed with this in mind.

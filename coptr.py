@@ -22,6 +22,7 @@ class ProgramOptions:
 
 command: index            create a bowtie2 index for a reference database
          map              map reads against a reference database
+         merge            merge BAM files from reads mapped to multiple indexes
          extract          compute coverage maps from bam files
          estimate         estimate PTRs from coverage maps
 '''
@@ -87,12 +88,24 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         read_mapper.map(args.index, args.input, args.out_folder, args.threads)
 
 
+    def merge(self):
+        parser = argparse.ArgumentParser(usage="coptr.py merge [-h] in-bam1 in-bam2 ... in-bamN out-bam")
+        parser.add_argument("in-bams", nargs="+", help="A space separateed list of BAM files to merge. Assumes same reads were mapped against different indexes.")
+        parser.add_argument("out-bam", help="Path to merged BAM.")
+
+        if len(sys.argv[2:]) < 2:
+            parser.print_help()
+            exit(1)
+
+        args = vars(parser.parse_args(sys.argv[2:]))
+        in_bams = args["in-bams"]
+        out_bam = args["out-bam"]
+        bam_processor = BamProcessor()
+        bam_processor.merge(in_bams, out_bam)
+
+
     def extract(self):
-        parser = argparse.ArgumentParser(usage=
-'''coptr.py extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex]
-            in-folder out-folder
-'''
-        )
+        parser = argparse.ArgumentParser(usage="coptr.py extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex] in-folder out-folder")
         parser.add_argument("in_folder", help="Folder with BAM files.")
         parser.add_argument("out_folder", help="Folder to store coverage maps.")
         parser.add_argument("--ref-genome-regex", default="[^\|]+",

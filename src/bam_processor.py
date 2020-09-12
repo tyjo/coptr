@@ -46,7 +46,7 @@ class BamProcessor:
         right reference genome id.
     """
 
-    def __init__(self, regex):
+    def __init__(self, regex="[^\|]+"):
         self.regex = regex
         self.min_avg_qual = 30
 
@@ -229,6 +229,62 @@ class BamProcessor:
                     CoverageMapRef(bam_file, genome_id, contig_read_positions[genome_id][ref_id], contig_lengths[genome_id][ref_id])
 
         return coverage_maps
+
+
+    def merge(self, bam_files, out_bam):
+        """Merge many bam files from different indexes into one, taking the
+        reads with the highest mapping quality from each bam.
+
+        Parameters
+        ----------
+            bam_files : list[str]
+                A list of bam files to merge.
+            out_bam : str
+                Location to store the merged bam file.
+        """
+        print_info("BamProcessor", "merging bam_files {}".format(bam_files))
+        print_info("BamProcessor", "finding reads with highest mapq")
+        # bam header: SN => LN
+        seq_len = {}
+        # read_id => (best_bamfile, best_score)
+        mapq = {}
+        # need to find the bam file with the highest mapping quality
+        for bam_file in bam_files:
+            bf = pysam.AlignmentFile(bam_file, "rb")
+
+            for sq in bf.header["SQ"]:
+                seq_len[sq["SN"]] = sq["LN"]
+
+            for aln in bf:
+                if aln.is_unmapped:
+                    continue
+
+                if aln.query_name not in mapq:
+                    mapq[aln.query_name] = (bam_file, aln.mapping_quality)
+                elif mapq[query_name][1] < aln.mapping_quality:
+                    mapq[aln.query_name] = (bam_file, aln.mapping_quality)
+
+            bf.close()
+
+        # combined header
+        header = { 
+            "HD" : {"VN": "1.0", "SO": "unsorted"},
+            "SQ" : [{"SN": sq, "LN" : seq_len[sq]} for sq in seq_len]
+        }
+
+        print_info("BamProcessor", "writing merged file {}".format(out_bam))
+        out = pysam.AlignmentFile(out_bam, "wb", header=header)
+        for bam_file in bam_files:
+            bf = pysam.AlignmentFile(bam_file, "rb")
+            for aln in bf:
+                if aln.is_unmapped:
+                    continue
+
+                if bam_file == mapq[aln.query_name][0]:
+                    out.write(aln)
+            bf.close()
+        print_info("BamProcessor", "finished wiring {}".format(out_bam))
+
 
 
 
