@@ -88,7 +88,7 @@ class ReadMapper:
         genomes_out.close()
 
         print_info("ReadMapper", "writing {} reference genome ids to {}".format(n_genomes, genomes_out.name))
-        call = ["bowtie2-build", fna_out.name, index_out, "--noref", "--threads", bt2_threads]
+        call = ["bowtie2-build", fna_out.name, index_out, "--threads", bt2_threads]
         if bt2_bmax is not None:
             call += ["--bmax", bt2_bmax]
         if bt2_dcv is not None:
