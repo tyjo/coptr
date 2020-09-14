@@ -261,7 +261,7 @@ class BamProcessor:
 
                 if aln.query_name not in mapq:
                     mapq[aln.query_name] = (bam_file, aln.mapping_quality)
-                elif mapq[query_name][1] < aln.mapping_quality:
+                elif mapq[aln.query_name][1] < aln.mapping_quality:
                     mapq[aln.query_name] = (bam_file, aln.mapping_quality)
 
             bf.close()
@@ -283,7 +283,7 @@ class BamProcessor:
                 if bam_file == mapq[aln.query_name][0]:
                     out.write(aln)
             bf.close()
-        print_info("BamProcessor", "finished wiring {}".format(out_bam))
+        print_info("BamProcessor", "finished writing {}".format(out_bam))
 
 
 
