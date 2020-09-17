@@ -107,7 +107,7 @@ class ReadMapper:
             sub.check_call(["rm", fna_out.name])
 
 
-    def map(self, index, inputf, outfolder, threads):
+    def map(self, index, inputf, outfolder, paired, threads):
         """Map reads from infile against reference database using bowtie2, then
         convert to a bam file.
 
@@ -119,6 +119,8 @@ class ReadMapper:
             File or folder with the reads to map
         outfolder : str
             Folder to save bam files.
+        paired : bool
+            True for paired end sequencing.
         threads : int
             Number of threads to use. Passed to the -p argument for bowtie2.
         """
@@ -149,40 +151,94 @@ class ReadMapper:
             call = ["rm", out_sam]
             sub.check_call(call)
 
-        elif os.path.isdir(inputf):
-                valid_ext = [".fastq", ".fq", ".gz"]
-                files_found = 0
-                for f in os.listdir(inputf):
-                    fname,ext1 = os.path.splitext(f)
-                    if ext1 == ".gz":
-                        ext2 = fname.split(".")[1]
-                    else:
-                        ext2 = ""
+        # single end sequencing
+        elif os.path.isdir(inputf) and not paired:
+            valid_ext = [".fastq", ".fq", ".gz"]
+            files_found = 0
+            for f in os.listdir(inputf):
+                fname,ext1 = os.path.splitext(f)
+                if ext1 == ".gz":
+                    ext2 = fname.split(".")[1]
+                else:
+                    ext2 = ""
 
-                    fpath = os.path.join(inputf,f)
-                    if ext1 in valid_ext or ext2 in valid_ext:
-                        bn = os.path.basename(f)
-                        bn,ext = os.path.splitext(bn)
-                        out_sam = os.path.join(outfolder, get_fastq_name(f) + ".sam")
-                        out_bam = os.path.join(outfolder, get_fastq_name(f) + ".bam")
+                fpath = os.path.join(inputf,f)
+                if ext1 in valid_ext or ext2 in valid_ext:
+                    bn = os.path.basename(f)
+                    bn,ext = os.path.splitext(bn)
+                    out_sam = os.path.join(outfolder, get_fastq_name(bn) + ".sam")
+                    out_bam = os.path.join(outfolder, get_fastq_name(bn) + ".bam")
 
-                        # map reads with bowtie2
-                        print_info("ReadMapper", "mapping {} to {}".format(fpath, out_sam))
-                        call = ["bowtie2", "-x", index, fpath, "--no-unal", "-p", str(threads)]
-                        print_info("ReadMapper", " ".join(call))
-                        sub.check_call(call, stdout=open(out_sam, "w"))
+                    # map reads with bowtie2
+                    print_info("ReadMapper", "mapping {} to {}".format(fpath, out_sam))
+                    call = ["bowtie2", "-x", index, fpath, "--no-unal", "-p", str(threads)]
+                    print_info("ReadMapper", " ".join(call))
+                    sub.check_call(call, stdout=open(out_sam, "w"))
 
-                        # then convert to a bam file
-                        print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
-                        infile = pysam.AlignmentFile(out_sam, "r")
-                        outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
-                        for s in infile:
-                            outfile.write(s)
+                    # then convert to a bam file
+                    print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
+                    infile = pysam.AlignmentFile(out_sam, "r")
+                    outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
+                    for s in infile:
+                        outfile.write(s)
 
-                        # now remove sam file
-                        print_info("ReadMapper", "cleaning up {}".format(out_sam))
-                        call = ["rm", out_sam]
-                        sub.check_call(call)
+                    # now remove sam file
+                    print_info("ReadMapper", "cleaning up {}".format(out_sam))
+                    call = ["rm", out_sam]
+                    sub.check_call(call)
+        
+        # paired end sequencing
+        elif os.path.isdir(inputf) and paired:
+            valid_ext = [".fastq", "fq", ".gz"]
+            files_found = 0
+            # file prefix -> [pair_1, pair_2]
+            read_pairs = {}
+            for f in os.listdir(inputf):
+                fname,ext1 = os.path.splitext(f)
+                if ext1 == ".gz":
+                    ext2 = fname.split(".")[1]
+                else:
+                    ext2 = ""
+
+                # the file is not a fastq file
+                if not ext1 in valid_ext and not ext2 in valid_ext:
+                    continue
+
+                # read pairs are labeled FILENAME_1.fastq or FILENAME_2.fastq
+                f_split = f.split("_")
+                if f_split[0] not in read_pairs:
+                    read_pairs[f_split[0]] = [f]
+                elif f_split[0] in read_pairs and f_split[1][0] == "2":
+                    read_pairs[f_split[0]].append(f)
+                elif f_split[0] in read_pairs and f_split[1][0] == "1":
+                    read_pairs[f_split[0]] = [f, read_pairs[f_split[0]][0]]
+
+            # now map paired end reads
+            for pair_name in sorted(read_pairs):
+                f1 = os.path.join(inputf, read_pairs[pair_name][0])
+                f2 = os.path.join(inputf, read_pairs[pair_name][1])
+                bn = os.path.basename(f1)
+                bn = bn.split("_")[0]
+                out_sam = os.path.join(outfolder, get_fastq_name(bn) + ".sam")
+                out_bam = os.path.join(outfolder, get_fastq_name(bn) + ".bam")
+
+                # map reads with bowtie2
+                print_info("ReadMapper", "mapping {},{} to {}".format(f1, f2, out_sam))
+                call = ["bowtie2", "-x", index, "-1", f1, "-2", f2, "--no-unal", "-p", str(threads)]
+                print_info("ReadMapper", " ".join(call))
+                sub.check_call(call, stdout=open(out_sam, "w"))
+
+                # then convert to a bam file
+                print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
+                infile = pysam.AlignmentFile(out_sam, "r")
+                outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
+                for s in infile:
+                    outfile.write(s)
+
+                # now remove sam file
+                print_info("ReadMapper", "cleaning up {}".format(out_sam))
+                call = ["rm", out_sam]
+                sub.check_call(call)
 
         else:
             print_error("ReadMapper", "input must either be a file or folder.")

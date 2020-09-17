@@ -7,7 +7,7 @@ Print error, warning, and info messages.
 import sys
 import time
 
-def print_error(module, msg, exit=True):
+def print_error(module, msg, quit=True):
     """Print an error message to the standard error.
 
     Parameters
@@ -20,7 +20,7 @@ def print_error(module, msg, exit=True):
             If TRUE, the program terminates after printing the error
     """
     print("[ERROR] ({}) {}: {}".format(time.strftime("%b %d, %Y %X"), module, msg), file=sys.stderr)
-    if exit:
+    if quit:
         exit(1)
 
 

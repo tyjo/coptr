@@ -139,7 +139,7 @@ convenient:
 
 .. code-block:: text
 
-    usage: coptr.py map [-h] [--threads INT] index input out-folder
+    usage: coptr.py map [-h] [--threads INT] [--paired] index input out-folder
 
     positional arguments:
       index              Name of database index.
@@ -150,6 +150,8 @@ convenient:
 
     optional arguments:
       -h, --help         show this help message and exit
+      --paired           Set for paired end reads. Assumes fastq files end in _1.*
+                         and _2.*
       --threads THREADS  Number of threads for bowtie2 mapping.
 
 The name of the database index corresponds to the name used from ``coptr.py index``.
@@ -177,17 +179,6 @@ indexes. You can use ```coptr.py merge``` to merge multiple bam files.
 
     optional arguments:
       -h, --help  show this help message and exit
-
-
-Note on paired end sequencing
------------------------------
-coPTR uses the density of reads along the genome to estimate PTRs. It
-uses the starting coordinate at each read to fit its model. Because
-mate pairs are not independent, once one read of the mate pair is observed
-the second read does not add any additional information.
-
-Therefore, we recommend using only **one mate pair from paired end sequencing**.
-The ``map`` command has been designed with this in mind.
 
 
 Computing coverage maps

@@ -64,7 +64,7 @@ fasta must be one of [.fasta, .fna, .fa]
 
 
     def map(self):
-        parser = argparse.ArgumentParser(usage="coptr.py map [-h] [--threads INT] index input out-folder")
+        parser = argparse.ArgumentParser(usage="coptr.py map [-h] [--threads INT] [--paired] index input out-folder")
         parser.add_argument("index", help="Name of database index.")
         parser.add_argument("input", help=
 '''File or folder containing fastq reads to map. If a folder, the extension for
@@ -74,6 +74,8 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("out_folder",
             help="Folder to save mapped reads. BAM files are output here."
         )
+        parser.add_argument("--paired", action="store_true",
+            help="Set for paired end reads. Assumes fastq files end in _1.* and _2.*")
         parser.add_argument("--threads", type=int, default=1, 
             help="Number of threads for bowtie2 mapping."
         )
@@ -85,7 +87,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
         args = parser.parse_args(sys.argv[2:])
         read_mapper = ReadMapper()
-        read_mapper.map(args.index, args.input, args.out_folder, args.threads)
+        read_mapper.map(args.index, args.input, args.out_folder, args.paired, args.threads)
 
 
     def merge(self):
@@ -149,7 +151,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
     def estimate(self):
         parser = argparse.ArgumentParser(usage=
-'''usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] coverage-map-folder out-file
+'''usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] [--plot OUTFOLDER] coverage-map-folder out-file
 '''
         )
         parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
@@ -158,6 +160,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("--min-cov", type=float, help="Fraction of nonzero 10Kb bins required to compute a PTR (default 0.75).", default=0.75)
         parser.add_argument("--min-samples", type=float, help="CoPTRContig only. Minimum number of samples required to reorder bins (default 5).", default=5)
         parser.add_argument("--threads", type=int, help="Number of threads to use (default 1).", default=1)
+        parser.add_argument("--plot", default=None, help="Plot model fit and save the results.")
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -188,8 +191,8 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                     sample_ids.add(coverage_maps[ref_id].sample_id)
 
         sample_ids = sorted(list(sample_ids))
-        results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, args.min_reads, args.min_cov, threads=args.threads)
-        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads)
+        results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, args.min_reads, args.min_cov, threads=args.threads, plot_folder=args.plot)
+        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads, plot_folder=args.plot)
 
         with open(args.out_file, "w") as f:
             # write the header

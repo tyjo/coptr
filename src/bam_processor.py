@@ -50,7 +50,6 @@ class BamProcessor:
         self.regex = regex
         self.min_avg_qual = 30
 
-
         # bam files without an index will generate a warning on
         # opening. since we don't need an index, setting the
         # verbosity will silence this message
@@ -118,6 +117,11 @@ class BamProcessor:
         read_positions = {}
         num_mapped_reads = {}
 
+        # mate pairs both have the same query name,
+        # so if we only want to select one read per mate,
+        # we need to quickly check duplicate read names
+        read_names = set()
+
         alignment_file = pysam.AlignmentFile(bam_file, "rb")
         for aln in alignment_file:
             if aln.is_unmapped:
@@ -128,8 +132,13 @@ class BamProcessor:
             pos = aln.get_reference_positions()[0]
             qual_scores = aln.query_qualities
             mean_qual = np.mean(qual_scores)
+            mapping_quality = aln.mapping_quality
 
             if mean_qual < self.min_avg_qual:
+                continue
+
+            # we've already seen this read's mate pair
+            if read_name in read_names:
                 continue
 
             if ref_name in read_positions:
@@ -137,6 +146,8 @@ class BamProcessor:
             else:
                 read_positions[ref_name] = [pos]
             num_mapped_reads[ref_name] = num_mapped_reads.get(ref_name, 0) + 1
+
+            read_names.add(read_name)
 
         lengths = self.get_ref_seq_lengths(bam_file)
         for ref_name in lengths:
