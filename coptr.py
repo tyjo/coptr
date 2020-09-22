@@ -64,7 +64,7 @@ fasta must be one of [.fasta, .fna, .fa]
 
 
     def map(self):
-        parser = argparse.ArgumentParser(usage="coptr.py map [-h] [--threads INT] [--paired] index input out-folder")
+        parser = argparse.ArgumentParser(usage="coptr.py map [-h] [--threads INT] [--bt2-k INT] [--paired] index input out-folder")
         parser.add_argument("index", help="Name of database index.")
         parser.add_argument("input", help=
 '''File or folder containing fastq reads to map. If a folder, the extension for
@@ -79,6 +79,10 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("--threads", type=int, default=1, 
             help="Number of threads for bowtie2 mapping."
         )
+        parser.add_argument("--bt2-k", dtype=int, default=20,
+            help="Number of alignments to report. Passed to -k flag of bowtie2",
+
+        )
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -87,7 +91,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
         args = parser.parse_args(sys.argv[2:])
         read_mapper = ReadMapper()
-        read_mapper.map(args.index, args.input, args.out_folder, args.paired, args.threads)
+        read_mapper.map(args.index, args.input, args.out_folder, args.paired, args.threads, args.bt2_k)
 
 
     def merge(self):
