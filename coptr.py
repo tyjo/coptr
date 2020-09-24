@@ -36,8 +36,9 @@ command: index            create a bowtie2 index for a reference database
         args = parser.parse_args(sys.argv[1:2])
 
         if not hasattr(self, args.command):
-            print_error("Main", "Unrecognized command.", exit=False)
+            print_error("Main", "Unrecognized command.", quit=False)
             parser.print_help()
+            exit(1)
         getattr(self, args.command)()
 
 
@@ -80,7 +81,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
             help="Number of threads for bowtie2 mapping."
         )
         parser.add_argument("--bt2-k", dtype=int, default=20,
-            help="Number of alignments to report. Passed to -k flag of bowtie2",
+            help="Number of alignments to report. Passed to -k flag of bowtie2.",
 
         )
 
@@ -130,13 +131,17 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         bam_processor = BamProcessor(args.ref_genome_regex)
         ref_sequences = set()
         ref_genomes = set()
-        for f in os.listdir(args.in_folder):
+        for f in sorted(os.listdir(args.in_folder)):
             fname, ext = os.path.splitext(f)
             if ext == ".bam":
                 fpath = os.path.join(args.in_folder, f)
                 seq, gen = bam_processor.get_ref_names(fpath)
                 ref_sequences.update(seq)
                 ref_genomes.update(gen)
+
+                if os.path.isfile(os.path.join(args.out_folder, get_fastq_name(f) + ".cm.pkl")):
+                    print_info("BamProcessor", "output for {} already found, skipping".format(fname))
+                    continue
 
                 # don't process the rest of the bam file if we just want to 
                 # sanity check the regular expression
@@ -176,7 +181,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         coverage_maps_contig = {}
         sample_ids = set()
 
-        for f in os.listdir(args.coverage_map_folder):
+        for f in sorted(os.listdir(args.coverage_map_folder)):
             fname, ext = os.path.splitext(f)
             if ext == ".pkl":
                 fpath = os.path.join(args.coverage_map_folder, f)
@@ -196,7 +201,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
         sample_ids = sorted(list(sample_ids))
         results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, args.min_reads, args.min_cov, threads=args.threads, plot_folder=args.plot)
-        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads, plot_folder=args.plot)
+        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads)
 
         with open(args.out_file, "w") as f:
             # write the header
@@ -213,7 +218,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                     if not np.isnan(result.estimate):
                         f.write(",{}".format(result.estimate))
                     else:
-                        f.write(",NA".format(result.estimate))
+                        f.write(",".format(result.estimate))
                 f.write("\n")
 
             for genome_id in sorted(results_contig):
@@ -224,7 +229,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                     if not np.isnan(result.estimate):
                         f.write(",{}".format(result.estimate))
                     else:
-                        f.write(",NA".format(result.estimate))
+                        f.write(",".format(result.estimate))
                 f.write("\n")   
 
 if __name__ == "__main__":
