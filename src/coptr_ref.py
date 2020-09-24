@@ -6,6 +6,7 @@ Estimate peak-to-trough ratios using complete reference genomes.
 import math
 import multiprocessing as mp
 import numpy as np
+import os.path
 import scipy.optimize
 import scipy.stats
 import sys
@@ -68,14 +69,43 @@ class ReadFilterRef:
             passed_qc : bool
                 A flag indicating if the sample passed quality control metrics
         """
+        # don't filter if there are too few reads
+        # just return that the sample failed QC
+        if len(read_positions) < self.min_reads:
+            return np.array([]), genome_length, QCResult(0, len(read_positions), False)
+
+        bin_size = self.compute_bin_size(genome_length)
         read_positions = np.copy(read_positions)
-        read_positions, genome_length = self.filter_reads_phase1(read_positions, genome_length)
-        filtered_read_positions, filtered_genome_length = self.filter_reads_phase2(read_positions, genome_length)
-        qc_result = self.quality_check(filtered_read_positions, filtered_genome_length, self.min_reads, self.min_cov)
+        filtered_read_positions, filtered_genome_length = self.filter_reads_phase1(read_positions, genome_length, bin_size)
+        filtered_read_positions, filtered_genome_length = self.filter_reads_phase2(filtered_read_positions, filtered_genome_length, bin_size)
+        qc_result = self.quality_check(filtered_read_positions, filtered_genome_length, bin_size, self.min_reads, self.min_cov)
         return filtered_read_positions, filtered_genome_length, qc_result
 
 
-    def quality_check(self, filtered_read_positions, filtered_genome_length, min_reads, frac_nonzero):
+    def compute_bin_size(self, genome_length):
+        """Compute bin size for read counts.
+
+        Parameters
+        ----------
+            genome_length : int
+                Length of the reference genome
+
+        Returns
+        -------
+            bin_size : int
+                Bin size for read countns
+        """
+        # we want approximately 500 bins
+        target_bins = 500
+        bin_size = genome_length / target_bins
+
+        # want a number divisible by 100 for downstream steps
+        bin_size = bin_size - (bin_size % 100)
+
+        return bin_size
+
+
+    def quality_check(self, filtered_read_positions, filtered_genome_length, bin_size, min_reads, frac_nonzero):
         """A basic quality check for required coverage of a genome in a sample.
 
         Parameters
@@ -95,8 +125,8 @@ class ReadFilterRef:
             qc_result : QCResult
                 Object that stores the result of the quality check
         """
-        binned_counts = self.bin_reads_10Kb(filtered_read_positions, filtered_genome_length)
-        nonzero_bins = (binned_counts > 0).sum() / binned_counts.size
+        binned_counts = self.bin_reads(filtered_read_positions, filtered_genome_length, bin_size)
+        nonzero_bins = (binned_counts > 0).sum() / np.max((1, binned_counts.size))
         nreads = binned_counts.sum()
 
         passed_qc = True if nonzero_bins >= frac_nonzero and nreads >= min_reads else False
@@ -104,59 +134,65 @@ class ReadFilterRef:
         return QCResult(nonzero_bins, nreads, passed_qc)
 
 
-    def compute_genomewide_bounds(self, median_read_count):
-        """Compute bounds on read counts in 10Kb bins.
+    def compute_genomewide_bounds(self, binned_counts):
+        """Compute bounds on read counts in bins.
 
         Parameters
         ----------
-            median_read_count : float
-                The median read count in 10Kb bins
+            binned_counts : np.array
+                Binned read counts
 
         Returns
         -------
             lower_bound : float
-                A lower bound on read counts in 10Kb bins
+                A lower bound on read counts in bins
             upper_bound : float
-                An upper bound on read counts in 10Kb bins
+                An upper bound on read counts in bins
 
         """
-        pois_upper = scipy.stats.poisson(2*median_read_count)
-        pois_lower = scipy.stats.poisson((1./2)*median_read_count)
-        for i in range(2, 17):
-            m = 0.5*i
-            lower_bound = (1./m)*median_read_count
-            upper_bound = m*median_read_count
-            if pois_upper.cdf(upper_bound) > 0.99 and (1 - pois_lower.cdf(lower_bound)) > 0.99:
-                return lower_bound, upper_bound
+        median = np.log2(np.median(binned_counts[binned_counts != 0]))
+
+        std = np.std(np.log2(binned_counts[binned_counts != 0]))
+        std = np.max((1, std))
+
+        norm = scipy.stats.norm()
+        m = norm.ppf(0.95)
+
+        lower_bound = np.power(2, median - m*std)
+        upper_bound = np.power(2, median + m*std)
+
         return lower_bound, upper_bound
 
 
-    def compute_bin_bounds(self, median_read_count):
+    def compute_bin_bounds(self, binned_counts):
         """Compute bounds on read counts in a smaller window along the genome.
 
         Parameters
         ----------
-            median_read_count : float
-                The median read count in 10Kb bins
+            binned_counts : np.array
+                Binned read counts
 
         Returns
         -------
             lower_bound : float
-                A lower bound on read counts in 10Kb bins
+                A lower bound on read counts in bins
             upper_bound : float
-                An upper bound on read counts in 10Kb bins   
+                An upper bound on read counts in bins
         """
-        pois = scipy.stats.poisson(median_read_count)
-        for i in range(2, 17):
-            m = 0.5*i
-            lower_bound = (1./m)*median_read_count
-            upper_bound = m*median_read_count
-            if pois.cdf(upper_bound) - pois.cdf(lower_bound) > 0.99:
-                return lower_bound, upper_bound
+        median = np.log2(np.median(binned_counts[binned_counts != 0]))
+        std = np.std(np.log2(binned_counts[binned_counts != 0]))
+        std = np.max((1, std))
+
+        norm = scipy.stats.norm()
+        m = norm.ppf(0.975)
+
+        lower_bound = np.power(2, median - m*std)
+        upper_bound = np.power(2, median + m*std)
+
         return lower_bound, upper_bound
 
 
-    def compute_rolling_sum(self, read_positions, genome_length):
+    def compute_rolling_sum(self, read_positions, genome_length, bin_size):
         """Compute a rolling sum of read counts in 10Kb bins, sliding 1Kb at
         a time.
 
@@ -176,12 +212,12 @@ class ReadFilterRef:
                 Each tuple gives the left (inclusive) and right (exclusive) 
                 end point of each bin.
         """
-        bin_size = 10000
-        step = 1000
+        step = math.ceil(bin_size/100)
         s = read_positions.size
 
         sorted_reads = np.sort(read_positions)
         endpoints = np.array([(i, i+bin_size) for i in range(0, genome_length, step)])
+        np.set_printoptions(suppress=True)
         rolling_counts = \
             np.array([
                 np.searchsorted(sorted_reads, right, side="right") 
@@ -219,7 +255,7 @@ class ReadFilterRef:
         filter_count = 0
         adjustment = 0
         for left,right in regions:
-            remove_size = right - left
+            remove_size = int(right - left)
             new_genome_length -= remove_size
 
             keep = np.logical_or(read_positions < (left - adjustment), read_positions >= (right - adjustment))
@@ -231,7 +267,7 @@ class ReadFilterRef:
         return read_positions, new_genome_length
 
 
-    def filter_reads_phase1(self, read_positions, genome_length):
+    def filter_reads_phase1(self, read_positions, genome_length, bin_size):
         """A coarse-grained genomewide filter that removes reads in
         ultra-high or ultra-low coverage regions.
 
@@ -250,11 +286,10 @@ class ReadFilterRef:
                 The length of the genome with filtered regions removed
         """
         read_positions = np.array(read_positions)
-        binned_reads = self.bin_reads_10Kb(read_positions, genome_length)
-        median = np.median(binned_reads)
-        lower_bound, upper_bound = self.compute_genomewide_bounds(median)
+        binned_reads = self.bin_reads(read_positions, genome_length, bin_size)
+        lower_bound, upper_bound = self.compute_genomewide_bounds(binned_reads)
 
-        rolling_counts, endpoints = self.compute_rolling_sum(read_positions, genome_length)
+        rolling_counts, endpoints = self.compute_rolling_sum(read_positions, genome_length, bin_size)
 
         # find regions to remove
         remove_start = None
@@ -279,11 +314,11 @@ class ReadFilterRef:
 
         read_positions, new_genome_length = self.remove_reads_by_region(read_positions, genome_length, remove_regions)
         
-        binned_reads = self.bin_reads_10Kb(read_positions, genome_length)
+        binned_reads = self.bin_reads(read_positions, genome_length, bin_size)
         return read_positions, new_genome_length
 
 
-    def filter_reads_phase2(self, read_positions, genome_length):
+    def filter_reads_phase2(self, read_positions, genome_length, bin_size):
         """A fine-grained filter that removes reads in localized regions
         with too-high or too-low coverage. For each 10Kb, looks 6.25% of
         the genome length ahead and 6.25% of the genome length behind.
@@ -305,11 +340,11 @@ class ReadFilterRef:
         """
 
         # rolling counts in 10Kb bins, shifting by 1000bp
-        rolling_counts, endpoints = self.compute_rolling_sum(read_positions, genome_length)
+        rolling_counts, endpoints = self.compute_rolling_sum(read_positions, genome_length, bin_size)
         nbins = rolling_counts.size
 
-        # how many 10 Kb bins to use
-        window = np.max((4,math.ceil(0.0625*genome_length / 10000)))
+        # how many bins to use
+        window = np.max((4,math.ceil(0.0625*genome_length / bin_size)))
         window = int(window)
 
         # find regions to remove
@@ -324,8 +359,8 @@ class ReadFilterRef:
             left, right = endpoints[i]
 
             # take bins in window to the left and right
-            left_bins = [(i - 10*j) for j in range(window)]
-            right_bins = [(i + 10*j) % nbins for j in range(window)]
+            left_bins = [(i - 100*j) for j in range(window)]
+            right_bins = [(i + 100*j) % nbins for j in range(window)]
             bins = np.concatenate((rolling_counts[left_bins], rolling_counts[right_bins]))
             median = np.median(bins)
 
@@ -334,9 +369,8 @@ class ReadFilterRef:
             if median in bounds:
                 lower_bound, upper_bound = bounds[median]
             else:
-                lower_bound, upper_bound = self.compute_bin_bounds(median)
+                lower_bound, upper_bound = self.compute_bin_bounds(bins)
                 bounds[median] = (lower_bound, upper_bound)
-
 
             if (c > upper_bound or c < lower_bound) and remove_start is None:
                 remove_start = left
@@ -352,13 +386,12 @@ class ReadFilterRef:
             remove_end = genome_length
             remove_regions.append((remove_start, remove_end))
 
-
         read_positions, new_genome_length = self.remove_reads_by_region(read_positions, genome_length, remove_regions)
         return read_positions, new_genome_length
 
 
-    def bin_reads_10Kb(self, read_positions, genome_length):
-        """Aggregate reads into 10Kb windows and compute the read count in each window.
+    def bin_reads(self, read_positions, genome_length, bin_size=10000):
+        """Aggregate reads into bin_size windows and compute the read count in each window.
         
         Parameters
         ----------
@@ -372,7 +405,6 @@ class ReadFilterRef:
             bin_counts : np.array
                 An array of the read count in each bin
         """
-        bin_size = 10000
         nbins = int(math.ceil(genome_length / bin_size))
         bin_counts = np.zeros(nbins)
 
@@ -396,27 +428,33 @@ class CoPTRRefEstimate:
         sample_id : str
             The sample id for the estimate
         estimate : float or np.nan
-            The estimated PTR. This will be set to np.nan if the sample
+            The estimated log2(PTR). This will be set to np.nan if the sample
             did not pass filtering steps
+        ori_estimate : float
+            Estimated replication origin position in interval [0, 1]
+        ter_estimate : float
+            Estimated replication terminus position in interval [0, 1]
         nreads : int
             The number of reads remaining after filtering
         cov_frac : float
             The fraction of nonzero bins in 10Kb windows.
     """
 
-    def __init__(self, bam_file, genome_id, sample_id, estimate, nreads, cov_frac):
+    def __init__(self, bam_file, genome_id, sample_id, estimate, ori_estimate, ter_estimate, nreads, cov_frac):
         self.bam_file = bam_file
         self.genome_id = genome_id
         self.sample_id = sample_id
         self.estimate = estimate
+        self.ori_estimate = ori_estimate
+        self.ter_estimate = ter_estimate
         self.nreads = nreads
         self.cov_frac = cov_frac
 
 
     def __str__(self):
-        return "CoPTRRefEstimate(bam_file={}, genome_id={}, sample_id={}, estimate={:.3f}, nreads={}, cov_frac={}".format(
+        return "CoPTRRefEstimate(bam_file={}, genome_id={}, sample_id={}, estimate={:.3f}, nreads={}, cov_frac={})".format(
             self.bam_file, self.genome_id, self.sample_id, self.estimate, self.nreads, self.cov_frac
-            )
+          )
 
     def __repr__(self):
         return self.__str__()
@@ -453,8 +491,10 @@ class CoPTRRef:
             read_locs : np.array of float
                 A 1D numpy array giving read positions in [0, 1]
         """
-        if ori_loc > 1 or ori_loc < 0 or ter_loc > 1 or ter_loc < 0 or log2_ptr > np.log2(4) or log2_ptr <= np.log2(1):
+        if ori_loc > 1 or ori_loc < 0 or ter_loc > 1 or ter_loc < 0 or log2_ptr > np.log2(16) or log2_ptr <= np.log2(1):
             return -np.inf
+
+        assert read_locs.size == 1 or np.all(read_locs[:-1] <= read_locs[1:]), "reads must be sorted"
 
         x1 = np.min([ori_loc, ter_loc])
         x2 = np.max([ori_loc, ter_loc])
@@ -492,7 +532,14 @@ class CoPTRRef:
         return log_prob
 
 
-    def estimate_ptr(self, read_positions, ref_genome_len):
+    def compute_multisample_log_likelihood(self, ori_loc, ter_loc, log2_ptrs, read_locs_list):
+        log_lk = 0
+        for log2_ptr, read_locs in zip(log2_ptrs, read_locs_list):
+            log_lk += self.compute_log_likelihood(ori_loc, ter_loc, log2_ptr, read_locs)
+        return log_lk
+
+
+    def estimate_ptr(self, read_positions, ref_genome_len, filter_reads=True, estimate_terminus=False):
         """Estimate the PTR for a single sample.
 
         Parameters
@@ -501,6 +548,11 @@ class CoPTRRef:
                 A 1D numpy array giving the starting coordinates of each read
             ref_genome_length : int
                 The length of the refernce genome
+            filter_reads : bool
+                If true, reads a filtered before estimates
+            estimate_terminus :
+                If true, the replication terminus is estimated in addition to the
+                replication origin
 
         Returns
         -------
@@ -513,32 +565,48 @@ class CoPTRRef:
             log_lk : float
                 The model log likelihood
         """
-        rf = ReadFilterRef(self.min_reads, self.min_cov)
-        read_positions, ref_genome_len, qc_result = rf.filter_reads(read_positions, ref_genome_len)
-        if not qc_result.passed_qc:
-            return np.nan, np.nan, np.nan, np.nan, qc_result
+        if filter_reads:
+            rf = ReadFilterRef(self.min_reads, self.min_cov)
+            read_positions, ref_genome_len, qc_result = rf.filter_reads(read_positions, ref_genome_len)
+            if not qc_result.passed_qc:
+                return np.nan, np.nan, np.nan, np.nan, qc_result
 
         read_locs = np.sort(np.array(read_positions) / ref_genome_len)
 
         # handled by multiple initial conditions
         np.seterr(invalid="ignore")
-        f = lambda x: -self.compute_log_likelihood(x[0], x[1], x[2], read_locs)
+
+        if estimate_terminus:
+            f = lambda x: -self.compute_log_likelihood(x[0], x[1], x[2], read_locs)
+
+            log_ptrs = [0.2*(i+1) for i in range(5)]
+            oris = [0.2*i for i in range(5)]
+            np.random.shuffle(log_ptrs)
+            np.random.shuffle(oris)
+            xs = []
+            for log_ptr in log_ptrs:
+                for ori in oris:
+                    ter = (0.5 + ori) % 1
+                    xs.append([ori, ter, log_ptr])
+            xs = np.array(xs)
+
+        else:
+            f = lambda x: -self.compute_log_likelihood(x[0], (x[0] + 0.5) % 1, x[1], read_locs)
+
+            log_ptrs = [0.2*(i+1) for i in range(5)]
+            oris = [0.2*i for i in range(5)]
+            np.random.shuffle(log_ptrs)
+            np.random.shuffle(oris)
+            xs = []
+            for log_ptr in log_ptrs:
+                for ori in oris:
+                    xs.append([ori, log_ptr])
+            xs = np.array(xs)
+  
         # initial ori estimate, initial ptr estimate
         best_x = 0
         best_f = np.inf
         nreads = len(read_locs)
-
-        # try multiple initial conditions
-        log_ptrs = [0.2*(i+1) for i in range(5)]
-        oris = [0.2*i for i in range(5)]
-        np.random.shuffle(log_ptrs)
-        np.random.shuffle(oris)
-        xs = []
-        for log_ptr in log_ptrs:
-            for ori in oris:
-                ter = (0.5 + ori) % 1
-                xs.append([ori, ter, log_ptr])
-        xs = np.array(xs)
 
         for x0 in xs:
             res = scipy.optimize.minimize(f, x0, method="SLSQP")
@@ -547,31 +615,225 @@ class CoPTRRef:
                 best_x = res.x
                 best_f = res.fun
 
+        if estimate_terminus:
+            ori = np.clip(best_x[0], 0, 1)
+            ter = np.clip(best_x[1], 0, 1)
+            log2_ptr = np.clip(best_x[2], 0, np.inf)
+        else:
+            ori = np.clip(best_x[0], 0, 1)
+            ter = (ori + 0.5) % 1
+            log2_ptr = np.clip(best_x[1], 0, np.inf)
+
 
         np.seterr(invalid="warn")
         if best_f == np.inf:
             print_warning("CoPTRRef", "PTR optimization failed")
             return np.nan, np.nan, np.nan, np.nan
+        elif not filter_reads:
+            return log2_ptr, ori, ter, -best_f
         else:
-            ori = np.clip(best_x[0], 0, 1)
-            ter = np.clip(best_x[1], 0, 1)
-            log2_ptr = np.clip(best_x[2], 0, np.inf)
             return log2_ptr, ori, ter, -best_f, qc_result
 
 
-    def _parallel_helper(self, x):
-        read_positions = x[0]
-        genome_length = x[1]
-        bam_file = x[2]
-        genome_id = x[3]
-        sample_id = x[4]
-        log2_ptr, ori, ter, log_lk, qc_result = self.estimate_ptr(read_positions, genome_length)
-        est = CoPTRRefEstimate(bam_file, genome_id, sample_id, log2_ptr, qc_result.nreads, qc_result.frac_nonzero)
-        return est
+    def update_ori_ter(self, log2_ptrs, read_locs_list):
+        """Compute maximum likelihood ori estimates across samples
+        given estimated log2(PTR)s across samples.
+
+        Parameters
+        ----------
+            log2_ptrs : list[float]
+                List of estimated log2(PTR)s across samples
+            read_locs_list list[np.array]
+                List of read positions in [0, 1] across samples
+
+        Returns
+        -------
+            ori : float
+                The estimated replication origin in [0, 1]
+            ter : float
+                The estimated replication terminus in [0, 1]
+
+        """
+        np.seterr(invalid="ignore")
+        xs = [0.1*i for i in range(10)]
+        f = lambda x: -self.compute_multisample_log_likelihood(x[0], (x[0] + 0.5 ) % 1, log2_ptrs, read_locs_list)
+
+        best_x = None
+        best_f = np.inf
+        for x0 in xs:
+            res = scipy.optimize.minimize(f, x0, method="SLSQP")
+
+            if not np.any(np.isnan(res.x)) and res.fun < best_f:
+                best_x = res.x
+                best_f = res.fun
+
+        np.seterr(invalid="warn")
+        return best_x, (best_x+0.5)%1
+
+
+    def update_ptrs(self, ori, ter, prv_log2_ptrs, read_locs_list):
+        """Compute maximum likelihood PTR estimates across samples
+        given an estimated replication origin and terminus.
         
+        Parameters
+        ----------
+            ori : float
+                The estimated origin in position in [0, 1]
+            ter : float
+                The estimated replication terminus position in [0, 1]
+            prv_log2_ptrs : list[float]
+                Estimated log2(PTR) across samples
+            read_locs_list list[np.array]
+                Read positions in [0, 1] across samples
+
+        Returns
+        -------
+            log2_ptrs : list[float]
+                The updated log2(PTR) estimates
+        """
+
+        np.seterr(invalid="ignore")
+        log2_ptrs = []
+        for i,read_locs in enumerate(read_locs_list):
+            f = lambda x: -self.compute_log_likelihood(ori, ter, x, read_locs)
+            res = scipy.optimize.minimize(f, prv_log2_ptrs[i], method="SLSQP")
+            log2_ptrs.append(res.x[0])
+        np.seterr(invalid="warn")
+        return log2_ptrs
 
 
-def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads):
+    def estimate_ptrs(self, coverage_maps):
+        """Compute maximum likelihood PTR estimates across samples.
+
+        Parameters
+        ----------
+            coverage_maps : list[CoverageMapRef]
+                A list of coverage maps per sample
+
+        Returns
+        -------
+            estimates : list[CoPTRefEstimate]
+                A list of estimates per sample
+
+        """
+        rf = ReadFilterRef(self.min_reads, self.min_cov)
+        estimates = []
+        sample_ids = []
+        read_positions_list = []
+        lengths = []
+        genome_id = coverage_maps[0].genome_id
+        for cm in coverage_maps:
+            read_positions, ref_genome_len, qc_result = rf.filter_reads(cm.read_positions, cm.length)
+            if qc_result.passed_qc:
+                read_positions_list.append(np.array(read_positions))
+                lengths.append(ref_genome_len)
+                sample_ids.append(cm.sample_id)
+
+            estimates.append(CoPTRRefEstimate(cm.bam_file, cm.genome_id, cm.sample_id, np.nan, np.nan, np.nan, qc_result.nreads, qc_result.frac_nonzero))
+
+        if len(sample_ids) == 0:
+            return estimates
+
+        print_info("CoPTRRef", "running {}".format(genome_id))
+
+        # first, compute individiual log2_ptr, ori, ter estimates
+        log2_ptrs = []
+        read_locs_list = []
+        for read_positions,length in zip(read_positions_list, lengths):
+            log2_ptr, ori, ter, f = self.estimate_ptr(read_positions, length, filter_reads=False)
+            log2_ptrs.append(log2_ptr)
+            read_locs_list.append(np.sort(read_positions / length))
+
+        # update replication origin
+        ori, ter = self.update_ori_ter(log2_ptrs, read_locs_list)
+        # update ptrs
+        new_log2_ptrs = self.update_ptrs(ori, ter, log2_ptrs, read_locs_list)
+
+        n = 0
+        for i,cm in enumerate(coverage_maps):
+            if cm.sample_id in sample_ids:
+                estimates[i].ori_estimate = ori
+                estimates[i].ter_estimate = ter
+                estimates[i].estimate = new_log2_ptrs[n]
+                n += 1
+
+        return estimates
+
+
+    def _parallel_helper(self, x):
+        ref_genome = x[0]
+        coverage_maps = x[1]
+
+        return (ref_genome, self.estimate_ptrs(coverage_maps))
+
+
+def plot_fit(coptr_ref_est, read_positions, genome_length, min_reads, min_cov, plot_folder):
+    import matplotlib.pyplot as plt
+
+    coptr = CoPTRRef(min_reads, min_cov)
+    rf = ReadFilterRef(min_reads, min_cov)
+
+    rp = np.array(read_positions)
+    length = genome_length
+
+    fig,ax = plt.subplots(nrows=2,ncols=1, figsize=(9,6))
+
+    # first plot unfiltered bins
+    bin_size = rf.compute_bin_size(genome_length)
+    binned_counts = rf.bin_reads(rp, length, bin_size)
+    x = np.linspace(0, 1, binned_counts.size)
+    median = np.median(binned_counts[binned_counts != 0])
+    lower_bound, upper_bound = rf.compute_genomewide_bounds(binned_counts)
+
+    min_y = np.min(binned_counts[binned_counts != 0])
+    min_y -= 0.5*min_y
+    max_y = np.max(binned_counts[binned_counts != 0]) + 0.008*binned_counts.sum()
+    
+    # plot bins
+    ax[0].scatter(x, binned_counts)
+    ax[0].set_yscale("log", base=2)
+    ax[0].set_ylim((min_y, max_y))
+    y_lim = ax[0].get_ylim()
+
+    # plot upper and lower bounds
+    ax[0].plot(x, median*np.ones(binned_counts.size), c="red", linewidth=3)
+    ax[0].plot(x, lower_bound*np.ones(binned_counts.size), c="red", ls=":", linewidth=3)
+    ax[0].plot(x, upper_bound*np.ones(binned_counts.size), c="red", ls=":", linewidth=3)
+
+    ax[0].set_ylabel("Read Count")
+    ax[0].set_xlabel("Position Along Genome")
+    ax[0].set_title("Binned Read Counts (Unfiltered)")
+
+    # now plot filtered bins and model fit
+    filtered_reads, filtered_length, qc_result = rf.filter_reads(rp, genome_length)
+    binned_counts = rf.bin_reads(filtered_reads, filtered_length, bin_size)
+
+    x = np.linspace(0, 1, binned_counts.size)
+    probs = binned_counts / binned_counts.sum()
+    ax[1].scatter(x, probs, c="C1")
+    ax[1].set_yscale("log", base=2)
+    min_y = np.min(probs[probs != 0])
+    min_y -= 0.5*min_y
+    max_y = np.max(probs) + 0.008
+    ax[1].set_ylim((min_y, max_y))
+
+    # plot fit
+    y = [  coptr.compute_log_likelihood(coptr_ref_est.ori_estimate, coptr_ref_est.ter_estimate, coptr_ref_est.estimate, xi) 
+           for xi in x ]
+    y = np.power(2, y)*(x[1] - x[0])
+    ax[1].plot(x, y, c="black", linewidth=3)
+    ax[1].set_ylabel("Density")
+    ax[1].set_xlabel("Position Along Genome")
+    ax[1].set_title("\nlog2(PTR)={:.3f} (Reads = {})".format(coptr_ref_est.estimate, int(binned_counts.sum())))
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_folder, coptr_ref_est.sample_id + "-" + coptr_ref_est.genome_id + ".pdf"))
+    plt.close()
+
+
+
+
+def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads, plot_folder=None):
     """Estimate Peak-to-Trough ratios across samples.
 
     Parameters
@@ -585,6 +847,8 @@ def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads):
             Fraction of nonzero 10Kb bins required to estimate PTR
         threads : int
             Number of threads for parallel computation
+        plot_folder : str
+            If not None, plots of fitted model are generated and saved here
 
     Returns
     -------
@@ -592,20 +856,29 @@ def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads):
             A dictionary with key reference genome id and value
             a list of CoPTRRefEstimate for that reference genome.
     """
-    # workers for multiprocessing
-    pool = mp.Pool(threads)
     coptr_ref_estimates = {}
     coptr_ref = CoPTRRef(min_reads, min_cov)
 
-    for ref_id in coverage_maps:
-        print_info("CoPTRRef", "estimating PTRs for {}".format(ref_id))
+    if threads > 1:
+        # workers for multiprocessing
+        pool = mp.Pool(threads)
+        flat_coverage_maps = [(ref_id, coverage_maps[ref_id]) for ref_id in coverage_maps]
+        flat_results = pool.map(coptr_ref._parallel_helper, flat_coverage_maps)
+        coptr_ref_estimates = dict(flat_results)
 
-        if threads > 1:
-            coptr_ref_estimates[ref_id] =  pool.map(coptr_ref._parallel_helper, [ (sample.read_positions, sample.length, sample.bam_file, sample.genome_id, sample.sample_id) for sample in coverage_maps[ref_id]])
-        else:
-            coptr_ref_estimates[ref_id] = []
-            for sample in coverage_maps[ref_id]:
-                log2_ptr, ori, ter, log_lk, qc_result = coptr_ref.estimate_ptr(sample.read_positions, sample.length)
-                est = CoPTRRefEstimate(sample.bam_file, sample.genome_id, sample.sample_id, log2_ptr, qc_result.nreads, qc_result.frac_nonzero)
-                coptr_ref_estimates[ref_id].append(est)
+        for ref_id in sorted(coverage_maps):
+            for sample,est in zip(coverage_maps[ref_id], coptr_ref_estimates[ref_id]):
+                 # only plot samples with a PTR estimate
+                 if plot_folder is not None and not np.isnan(est.estimate):
+                     plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
+
+    else:
+        for ref_id in sorted(coverage_maps):
+            coptr_ref_estimates[ref_id] = coptr_ref.estimate_ptrs(coverage_maps[ref_id])
+
+            for sample,est in zip(coverage_maps[ref_id], coptr_ref_estimates[ref_id]):
+                 # only plot samples with a PTR estimate
+                 if plot_folder is not None and not np.isnan(est.estimate):
+                     plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
+
     return coptr_ref_estimates
