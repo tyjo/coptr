@@ -15,6 +15,7 @@ import time
 from src.print import print_error, print_info
 from src.util import get_fastq_name
 
+
 class ReadMapper:
     """Wrapper around bowtie2.
     """
@@ -107,7 +108,7 @@ class ReadMapper:
             sub.check_call(["rm", fna_out.name])
 
 
-    def map(self, index, inputf, outfolder, paired, threads):
+    def map(self, index, inputf, outfolder, paired, threads, bt2_k=20):
         """Map reads from infile against reference database using bowtie2, then
         convert to a bam file.
 
@@ -123,7 +124,11 @@ class ReadMapper:
             True for paired end sequencing.
         threads : int
             Number of threads to use. Passed to the -p argument for bowtie2.
+        bt2_k : int
+            Number of alignments to report
         """
+        bt2_k = str(bt2_k)
+
         if not os.path.isdir(outfolder):
             print_error("ReadMapper", "output folder does not exist.")
 
@@ -135,9 +140,10 @@ class ReadMapper:
 
             # first map to a sam file with bowtie2
             print_info("ReadMapper", "mapping {} to {}".format(inputf, out_sam))
-            call = ["bowtie2", "-x", index, inputf, "--no-unal", "-p", str(threads)]
+            call = ["bowtie2", "-x", index, inputf, "--no-unal", "-p", str(threads), "-k", bt2_k]
             print_info("ReadMapper", " ".join(call))
-            sub.check_call(call, stdout=open(out_sam, "w"))
+            with open(out_sam, "w") as out:
+                sub.check_call(call, stdout=out)
 
             # then convert to a bam file
             print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
@@ -145,6 +151,8 @@ class ReadMapper:
             outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
             for s in infile:
                 outfile.write(s)
+            infile.close()
+            outfile.close()
 
             # now remove sam file
             print_info("ReadMapper", "cleaning up {}".format(out_sam))
@@ -171,9 +179,10 @@ class ReadMapper:
 
                     # map reads with bowtie2
                     print_info("ReadMapper", "mapping {} to {}".format(fpath, out_sam))
-                    call = ["bowtie2", "-x", index, fpath, "--no-unal", "-p", str(threads)]
+                    call = ["bowtie2", "-x", index, fpath, "--no-unal", "-p", str(threads), "-k", bt2_k]
                     print_info("ReadMapper", " ".join(call))
-                    sub.check_call(call, stdout=open(out_sam, "w"))
+                    with open(out_sam, "w") as out:
+                        sub.check_call(call, stdout=out)
 
                     # then convert to a bam file
                     print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
@@ -181,6 +190,8 @@ class ReadMapper:
                     outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
                     for s in infile:
                         outfile.write(s)
+                    infile.close()
+                    outfile.close()
 
                     # now remove sam file
                     print_info("ReadMapper", "cleaning up {}".format(out_sam))
@@ -224,9 +235,10 @@ class ReadMapper:
 
                 # map reads with bowtie2
                 print_info("ReadMapper", "mapping {},{} to {}".format(f1, f2, out_sam))
-                call = ["bowtie2", "-x", index, "-1", f1, "-2", f2, "--no-unal", "-p", str(threads)]
+                call = ["bowtie2", "-x", index, "-1", f1, "-2", f2, "--no-unal", "-p", str(threads), "-k", bt2_k]
                 print_info("ReadMapper", " ".join(call))
-                sub.check_call(call, stdout=open(out_sam, "w"))
+                with open(out_sam, "w") as out:
+                    sub.check_call(call, stdout=out)
 
                 # then convert to a bam file
                 print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
@@ -234,6 +246,8 @@ class ReadMapper:
                 outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
                 for s in infile:
                     outfile.write(s)
+                infile.close()
+                outfile.close()
 
                 # now remove sam file
                 print_info("ReadMapper", "cleaning up {}".format(out_sam))
