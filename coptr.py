@@ -80,7 +80,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("--threads", type=int, default=1, 
             help="Number of threads for bowtie2 mapping."
         )
-        parser.add_argument("--bt2-k", dtype=int, default=20,
+        parser.add_argument("--bt2-k", type=int, default=20,
             help="Number of alignments to report. Passed to -k flag of bowtie2.",
 
         )
