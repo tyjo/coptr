@@ -5,6 +5,7 @@ Extract coordinates along each reference sequence and group reference
 sequences by genome.
 """
 
+import bisect
 import math
 import numpy as np
 import os.path
@@ -12,7 +13,7 @@ import pysam
 import re
 import sys
 
-from scipy.sparse import lil_matrix
+from scipy.sparse import lil_matrix, csr_matrix
 
 from src.print import print_info
 from src.read_assigner import ReadAssigner
@@ -28,11 +29,13 @@ class ReadContainer:
         self.reads = {}
         # index to ref name, read position, alignment score
         # this is more memory efficient than other options
-        self.read_data = np.zeros((1000000, 3))
+        self.read_data = np.zeros((1000000, 3), dtype=np.uint32)
         # next row to insert data
         self.next_row_idx = 0
         # names of reference sequences
-        self.ref_names = []
+        self.ref_names_index = {}
+        self.index_ref_name = {}
+        self.next_ref_idx = 0
 
 
     def check_add_mapping(self, query_id, ref_name, ref_position, score):
@@ -54,7 +57,7 @@ class ReadContainer:
             self.reads[query_id] = []
             best_score = -np.inf
         else:
-            row_ids = self.reads[query_id]
+            row_ids = list(self.reads[query_id])
             best_score = np.max(self.read_data[row_ids,2])
 
         # we've run out of room in the read data matrix,
@@ -63,15 +66,17 @@ class ReadContainer:
             new_read_data[:self.next_row_idx, :] = self.read_data
             self.read_data = new_read_data
 
-        if ref_name not in self.ref_names:
-            self.ref_names.append(ref_name)
+        if ref_name not in self.ref_names_index:
+            self.ref_names_index[ref_name] = self.next_ref_idx
+            self.index_ref_name[self.next_ref_idx] = ref_name
+            self.next_ref_idx += 1
 
         # don't store mappings if they are worse
         # than the one we've seen so far
         if score < best_score:
             return
         else:
-            self.read_data[self.next_row_idx][0] = self.ref_names.index(ref_name)
+            self.read_data[self.next_row_idx][0] = self.ref_names_index[ref_name]
             self.read_data[self.next_row_idx][1] = ref_position
             self.read_data[self.next_row_idx][2] = score
             self.reads[query_id].append(self.next_row_idx)
@@ -93,17 +98,17 @@ class ReadContainer:
             ref_positions : list[int]
                 A list of positions in each reference sequences.
         """
-        row_ids = self.reads[query_id]
+        row_ids = list(self.reads[query_id])
         best_score = np.max(self.read_data[row_ids,2])
         ref_names = []
         ref_positions = []
         for row in self.read_data[row_ids,:]:
             ref_name_idx = int(row[0])
-            ref_pos = row[1]
-            score = row[2]
+            ref_pos = int(row[1])
+            score = int(row[2])
 
             if score == best_score:
-                ref_names.append(self.ref_names[ref_name_idx])
+                ref_names.append(self.index_ref_name[ref_name_idx])
                 ref_positions.append(ref_pos)
 
         return ref_names, ref_positions
@@ -142,15 +147,22 @@ class BamProcessor:
         right reference genome id.
     """
 
-    def __init__(self, regex="[^\|]+"):
+    def __init__(self, regex="[^\|]+", is_bam=True):
         self.regex = regex
         # min percent identity to consider a valid read
-        self.min_identity = 0.925
+        self.min_identity = 0.95
 
         # bam files without an index will generate a warning on
         # opening. since we don't need an index, setting the
         # verbosity will silence this message
         pysam.set_verbosity(0)
+
+        if is_bam:
+            self.read_mode = "rb"
+            self.write_mode = "wb"
+        else:
+            self.read_mode = "r"
+            self.write_mode = "w"
 
 
     def get_ref_names(self, bam_file):
@@ -171,7 +183,7 @@ class BamProcessor:
         ref_seqs = set()
         ref_genomes = set()
 
-        infile = pysam.AlignmentFile(bam_file, "rb")
+        infile = pysam.AlignmentFile(bam_file, self.read_mode)
         for sq in infile.header["SQ"]:
             ref_seq_id = sq["SN"]
 
@@ -209,11 +221,14 @@ class BamProcessor:
                 A dictionary whose key is a reference sequence id,
                 and the value is the length of that reference sequence
         """
+        lengths = self.get_ref_seq_lengths(bam_file)
+        
         read_container = ReadContainer()
 
-        alignment_file = pysam.AlignmentFile(bam_file, "rb")
+        alignment_file = pysam.AlignmentFile(bam_file, self.read_mode)
 
-        for aln in alignment_file:
+        for aln in alignment_file.fetch(until_eof=True):
+
             if aln.is_unmapped or aln.is_qcfail:
                 continue
 
@@ -229,15 +244,17 @@ class BamProcessor:
             # This minimum scores means that reads with perfect
             # quality scores that fall below min_identity will
             # be discarded
-            min_score = -6*self.min_identity*aln.query_alignment_length
+            min_score = -6*(1-self.min_identity)*aln.query_alignment_length
             alignment_score = aln.get_tag("AS")
 
             if alignment_score < min_score:
                 continue
 
+            assert pos < lengths[ref_name]
+
             read_container.check_add_mapping(read_name, ref_name, pos, alignment_score)
 
-        lengths = self.get_ref_seq_lengths(bam_file)
+        alignment_file.close()
         return read_container, lengths
 
 
@@ -256,17 +273,18 @@ class BamProcessor:
                 and value is the length of that reference sequence.
         """
         ref_seq_lengths = {}
-        alignment_file = pysam.AlignmentFile(bam_file, "rb")
+        alignment_file = pysam.AlignmentFile(bam_file, self.read_mode)
         for sq in alignment_file.header["SQ"]:
 
             if "LN" not in sq:
                 continue
             ref_seq_lengths[sq["SN"]] = sq["LN"]
 
+        alignment_file.close()
         return ref_seq_lengths
 
 
-    def assign_multimapped_reads(self, read_container):
+    def assign_multimapped_reads(self, read_container, lengths):
         """Assign multiple mapped reads to a single genome.
 
         Parameters
@@ -281,31 +299,36 @@ class BamProcessor:
                 A dictionary whose key is a sequence id, and
                 value are the read positions along that sequence.
         """
-        print_info("BamProcessor", "collecting multi-mapped reads")
+        print_info("BamProcessor", "determining reference genomes")
         genome_ids = set()
 
         # sequence_id -> genome_id
         ref_seq_genome_id = {}
 
-        for ref_name in read_container.ref_names:
-            match = re.match(self.regex, ref_name)
-            genome_id = match.group(0) if match is not None else ref_name
+        for ref_name in read_container.ref_names_index:
+            if self.regex == "[^\|]+":
+                genome_id = ref_name.split("|")[0]
+            else:
+                match = re.match(self.regex, ref_name)
+                genome_id = match.group(0) if match is not None else ref_name
             ref_seq_genome_id[ref_name] = genome_id
             genome_ids.add(genome_id)
 
 
+        print_info("BamProcessor", "collecting multi-mapped reads")
         genome_ids = sorted(list(genome_ids))
         # reads that fail filtering criteria
         discarded_reads = set()
-        # data matrix to store multi-mappted reads
-        # this matrix can get large, so we need to
-        # store it as a sparse matrix
-        X = lil_matrix((len(read_container.reads), len(genome_ids)))
         # single-mapped reads can be used to set a prior
         # on the proportios of each genome in the sample
         prior_counts = np.zeros(len(genome_ids))
         # where to add the next entry in X
         current_row = 0
+
+        # fields to construct a sparse csr_matrix
+        data = []
+        indices = []
+        indptr = [0]
         for read_id in sorted(read_container.reads):
             ref_names, ref_positions = read_container.get_mappings(read_id)
             ref_genomes = [ref_seq_genome_id[r] for r in ref_names]
@@ -323,20 +346,22 @@ class BamProcessor:
             # if the read maps to only one genome, use it to
             # set the prior for the read assignment model
             if len(ref_genomes) == 1:
-                prior_counts[genome_ids.index(genome_id)] += 1
+                prior_counts[bisect.bisect_left(genome_ids, genome_id)] += 1
             # otherwise, store the mappings with indicators
             else:
                 for genome_id in ref_genomes:
-                    idx = genome_ids.index(genome_id)
-                    X[current_row,idx] = 1
+                    idx = bisect.bisect_left(genome_ids, genome_id)
+                    indices.append(idx)
+                    data.append(1)
+                indptr.append(len(indices))
                 current_row += 1
 
-        X = X[:current_row,]
-        X.tocsr()
+        if len(data) > 0:
+            X = csr_matrix((data, indices, indptr))
 
-        print_info("BamProcessor", "assigning multi-mapped reads")
-        read_assigner = ReadAssigner(X, prior_counts)
-        assignments = read_assigner.assign_reads()
+            print_info("BamProcessor", "assigning multi-mapped reads")
+            read_assigner = ReadAssigner(X, prior_counts)
+            assignments = read_assigner.assign_reads()
 
         # sequence id -> position along sequence
         read_positions = {}
@@ -366,12 +391,14 @@ class BamProcessor:
                     mapping_genome_ids.append(genome_id)
                 
                 assignment_id = assignments[current_row]
-                assigned_genome_id = genome_ids[assignment_id]
-                sequence_id = mapping_genome_ids.index(assigned_genome_id)
+                assigned_genome = genome_ids[assignment_id]
+                sequence_id = mapping_genome_ids.index(assigned_genome)
                 ref_name = ref_names[sequence_id]
                 pos = ref_positions[sequence_id]
                 current_row += 1
 
+            # sanity check
+            assert pos < lengths[ref_name]
 
             if ref_name not in read_positions:
                 read_positions[ref_name] = [pos]
@@ -406,12 +433,12 @@ class BamProcessor:
         # assign multiply mapped reads to reference sequences
         # 1. dict[ref_seq_id] -> int (read position)
         # 2. dict[ref_seq_id] -> genome_id
-        read_positions, ref_seq_genome_id = self.assign_multimapped_reads(reads)
+        read_positions, ref_seq_genome_id = self.assign_multimapped_reads(reads, lengths)
 
         # fill in read_positions with remaining sequence ids
-        # for seq_id in lengths:
-        #     if seq_id not in read_positions:
-        #         read_positions[seq_id] = []
+        for seq_id in lengths:
+            if seq_id not in read_positions:
+                read_positions[seq_id] = []
 
         # we now need to group reference sequencies by species
         # assemblies will have multiple contigs, while complete reference
@@ -422,7 +449,7 @@ class BamProcessor:
         print_info("BamProcessor", "grouping reads by reference genome")
         # group by reference genome
         # for contigs, this will group all contigs together by species
-        for ref in sorted(read_positions):
+        for ref in sorted(lengths):
             if ref not in ref_seq_genome_id:
                 match = re.match(self.regex, ref)
 
@@ -439,6 +466,7 @@ class BamProcessor:
 
             contig_read_positions[genome_id][ref] = read_positions[ref]
             contig_lengths[genome_id][ref] = lengths[ref]
+
 
         # now, store coverage maps for each refence genome
         coverage_maps = {}
@@ -468,26 +496,26 @@ class BamProcessor:
                 Location to store the merged bam file.
         """
         print_info("BamProcessor", "merging bam_files {}".format(bam_files))
-        print_info("BamProcessor", "finding reads with highest alignment score")
+        print_info("BamProcessor", "keeping reads with highest alignment score")
         # bam header: SN => LN
         seq_len = {}
         # read_id => best_score
         score = {}
         # need to find the bam file with the highest alignment score
         for bam_file in bam_files:
-            bf = pysam.AlignmentFile(bam_file, "rb")
+            bf = pysam.AlignmentFile(bam_file, self.read_mode)
 
             for sq in bf.header["SQ"]:
                 seq_len[sq["SN"]] = sq["LN"]
 
-            for aln in bf:
-                if aln.is_unmapped:
+            for aln in bf.fetch(until_eof=True):
+                if aln.is_unmapped or aln.is_qcfail:
                     continue
 
                 alignment_score = aln.get_tag("AS")
-                if aln.query_name not in score:
+                if not aln.is_read2 and aln.query_name not in score:
                     score[aln.query_name] = alignment_score
-                elif score[aln.query_name] < alignment_score:
+                elif not aln.is_read2 and score[aln.query_name] < alignment_score:
                     score[aln.query_name] = alignment_score
 
             bf.close()
@@ -495,21 +523,37 @@ class BamProcessor:
         # combined header
         header = { 
             "HD" : {"VN": "1.0", "SO": "unsorted"},
-            "SQ" : [{"SN": sq, "LN" : seq_len[sq]} for sq in seq_len]
+            "SQ" : [{"SN": sq, "LN" : seq_len[sq]} for sq in sorted(seq_len)]
         }
 
+        seq_names = sorted(seq_len.keys())
+
+
         print_info("BamProcessor", "writing merged file {}".format(out_bam))
-        out = pysam.AlignmentFile(out_bam, "wb", header=header)
+        out = pysam.AlignmentFile(out_bam, self.write_mode, header=header)
         for bam_file in bam_files:
-            bf = pysam.AlignmentFile(bam_file, "rb")
-            for aln in bf:
-                if aln.is_unmapped:
+            inf = pysam.AlignmentFile(bam_file, self.read_mode)
+            for in_aln in inf.fetch(until_eof=True):
+                if in_aln.is_unmapped or in_aln.is_qcfail:
                     continue
 
-                alignment_score = aln.get_tag("AS")
-                if alignment_score == score[aln.query_name]:
-                    out.write(aln)
-            bf.close()
+                alignment_score = in_aln.get_tag("AS")
+                if in_aln.query_name in score and alignment_score == score[in_aln.query_name] and not in_aln.is_read2:
+                    # reference name will be wrong if it is not expicility set
+                    out_aln = pysam.AlignedSegment()
+                    out_aln.query_name = in_aln.query_name
+                    out_aln.query_sequence = in_aln.query_sequence
+                    out_aln.flag = in_aln.flag
+                    out_aln.reference_id = bisect.bisect_left(seq_names, in_aln.reference_name)
+                    out_aln.reference_start = in_aln.reference_start
+                    out_aln.cigar = in_aln.cigar
+                    out_aln.template_length = in_aln.template_length
+                    out_aln.query_qualities = in_aln.query_qualities
+                    out_aln.tags = in_aln.tags
+
+                    out.write(out_aln)
+            inf.close()
+        out.close()
         print_info("BamProcessor", "finished writing {}".format(out_bam))
 
 
@@ -605,6 +649,7 @@ class CoverageMapContig(CoverageMap):
         self.contig_read_positions = contig_read_positions
         self.contig_lengths = contig_lengths
 
+        self.bin_size = None
         self.binned_reads = {}
         # total number of 10Kb bins
         self.total_bins = None
@@ -623,6 +668,34 @@ class CoverageMapContig(CoverageMap):
 
     def __repr__(self):
         return self.__str__()
+
+
+    def compute_bin_size(self):
+        """Compute bin size for read counts.
+
+        Returns
+        -------
+            bin_size : int
+                Bin size for read counts
+        """
+        if self.bin_size is not None:
+            return self.bin_size
+
+        # we want approximately 500 bins
+        target_bins = 500
+
+        total_length = 0
+        for contig_id in self.contig_lengths:
+            length = self.contig_lengths[contig_id]
+            if length >= 11000: total_length += length
+
+        bin_size = np.max((1000, total_length / target_bins))
+
+        # want a number divisible by 100 for downstream steps
+        bin_size = bin_size - (bin_size % 100)
+        self.bin_size = bin_size
+
+        return bin_size
 
 
     def get_length(self, contig_id):
@@ -659,7 +732,7 @@ class CoverageMapContig(CoverageMap):
         return reads
 
 
-    def bin_reads_10Kb(self, contig_id):
+    def bin_reads(self, contig_id):
         """Count reads in 10Kb windows.
 
         Parameters
@@ -672,7 +745,7 @@ class CoverageMapContig(CoverageMap):
             binned_reads : numpy.array
                 Total number of reads in each 10Kb window
         """
-        bin_size = 10000
+        bin_size = self.compute_bin_size()
         contig_length = self.contig_lengths[contig_id]
 
         if contig_id not in self.binned_reads:
@@ -680,6 +753,10 @@ class CoverageMapContig(CoverageMap):
 
             nbins = int(math.floor(contig_length / bin_size))
             bin_counts = np.zeros(nbins)
+
+            # the contig is too small
+            if bin_counts.size == 0:
+                return bin_counts
 
             if contig_id not in self.contig_read_positions:
                 self.bin_counts[contig_id].append(bin_counts)
@@ -705,12 +782,12 @@ class CoverageMapContig(CoverageMap):
         for cid in self.contig_ids:
             length = self.contig_lengths[cid]
             if length < 11000: continue
-            bins = self.bin_reads_10Kb(cid)
+            bins = self.bin_reads(cid)
             total_bins += bins.size
             total_reads += bins.sum()
             zero_bins += (bins == 0).sum()
 
-        if total_bins == 0 or (zero_bins / total_bins > 0.5 and total_bins > 50):
+        if total_bins == 0 or zero_bins / total_bins > 0.5 or total_bins < 50:
             self.passed_qc_flag = False
         else:
             self.passed_qc_flag = True
