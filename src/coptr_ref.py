@@ -787,7 +787,6 @@ class CoPTRRef:
                     estimates[i].ter_estimate = ter
                     estimates[i].estimate = log2_ptrs[n]
                 n += 1
-                print(cm.sample_id, estimates[i].estimate)
 
         return estimates
 
