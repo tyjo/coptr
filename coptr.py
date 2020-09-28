@@ -97,7 +97,9 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
     def merge(self):
         parser = argparse.ArgumentParser(usage="coptr.py merge [-h] in-bam1 in-bam2 ... in-bamN out-bam")
-        parser.add_argument("in-bams", nargs="+", help="A space separateed list of BAM files to merge. Assumes same reads were mapped against different indexes.")
+        parser.add_argument("in-bams", nargs="+",
+          help="A space separateed list of BAM files to merge. Assumes same reads were mapped against different indexes. " +
+               "Only keeps read 1 of paired end sequencing, since this is used downstream.")
         parser.add_argument("out-bam", help="Path to merged BAM.")
 
         if len(sys.argv[2:]) < 2:
@@ -149,7 +151,8 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                     continue
 
                 coverage_maps = bam_processor.process_bam(fpath)
-                pkl.dump(coverage_maps, open(os.path.join(args.out_folder, get_fastq_name(f) + ".cm.pkl"), "wb"))
+                with open(os.path.join(args.out_folder, get_fastq_name(f) + ".cm.pkl"), "wb") as f:
+                    pkl.dump(coverage_maps, f)
 
         print_info("BamProcessor", "found {} reference sequences corresponding to {} genomes".format(len(ref_sequences), len(ref_genomes)))
         if args.check_regex:
@@ -201,7 +204,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
         sample_ids = sorted(list(sample_ids))
         results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, args.min_reads, args.min_cov, threads=args.threads, plot_folder=args.plot)
-        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads)
+        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads, plot_folder=args.plot)
 
         with open(args.out_file, "w") as f:
             # write the header
