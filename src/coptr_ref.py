@@ -23,15 +23,25 @@ class QCResult:
             Fraction of nonzero bins in 10Kb windows
         nreads : int
             Number of reads after filtering
+        frac_removed : float
+            Proportion of genome removed during filtering
         passed_qc : bool
             Flag indicating if the sample passed quality thresholds
     """
 
-    def __init__(self, frac_nonzero, nreads, passed_qc):
+    def __init__(self, frac_nonzero, nreads, frac_removed, passed_qc):
         self.frac_nonzero = frac_nonzero
         self.nreads = nreads
+        self.frac_removed = frac_removed
         self.passed_qc = passed_qc
 
+    def __str__(self):
+        return "QCResult(frac_nonzero={}, nreads={}, frac_removed={}, passed_qc={})".format(
+            self.frac_nonzero, self.nreads, self.frac_removed, self.passed_qc
+        )
+
+    def __repr__(self):
+        return self.__str__()
 
 class ReadFilterRef:
     """Read filtering steps for CoPTR Ref.
@@ -72,13 +82,13 @@ class ReadFilterRef:
         # don't filter if there are too few reads
         # just return that the sample failed QC
         if len(read_positions) < self.min_reads:
-            return np.array([]), genome_length, QCResult(0, len(read_positions), False)
+            return np.array([]), genome_length, QCResult(0, len(read_positions), 0, False)
 
         bin_size = self.compute_bin_size(genome_length)
         read_positions = np.copy(read_positions)
         filtered_read_positions, filtered_genome_length = self.filter_reads_phase1(read_positions, genome_length, bin_size)
         filtered_read_positions, filtered_genome_length = self.filter_reads_phase2(filtered_read_positions, filtered_genome_length, bin_size)
-        qc_result = self.quality_check(filtered_read_positions, filtered_genome_length, bin_size, self.min_reads, self.min_cov)
+        qc_result = self.quality_check(filtered_read_positions, filtered_genome_length, genome_length, bin_size, self.min_reads, self.min_cov)
         return filtered_read_positions, filtered_genome_length, qc_result
 
 
@@ -105,7 +115,7 @@ class ReadFilterRef:
         return bin_size
 
 
-    def quality_check(self, filtered_read_positions, filtered_genome_length, bin_size, min_reads, frac_nonzero):
+    def quality_check(self, filtered_read_positions, filtered_genome_length, original_genome_length, bin_size, min_reads, frac_nonzero):
         """A basic quality check for required coverage of a genome in a sample.
 
         Parameters
@@ -115,6 +125,8 @@ class ReadFilterRef:
                 after filtering
             filtered_genome_length : float
                 The length of the reference genome after filtering
+            original_genome_length : float
+                The length of the reference genome before filtering
             min_reads : float
                 Minumum read count after filtering
             frac_nonzero : float
@@ -131,7 +143,11 @@ class ReadFilterRef:
 
         passed_qc = True if nonzero_bins >= frac_nonzero and nreads >= min_reads else False
 
-        return QCResult(nonzero_bins, nreads, passed_qc)
+        frac_removed = 1 - filtered_genome_length / original_genome_length
+        if frac_removed > 0.25:
+            passed_qc = False
+
+        return QCResult(nonzero_bins, nreads, frac_removed, passed_qc)
 
 
     def compute_genomewide_bounds(self, binned_counts):
@@ -217,16 +233,24 @@ class ReadFilterRef:
 
         sorted_reads = np.sort(read_positions)
         endpoints = np.array([(i, i+bin_size) for i in range(0, genome_length, step)])
-        np.set_printoptions(suppress=True)
-        rolling_counts = \
-            np.array([
-                np.searchsorted(sorted_reads, right, side="right") 
-                - np.searchsorted(sorted_reads, left, side="right")
-                for left,right in endpoints
-            ])
 
-        rolling_counts = np.array(rolling_counts)
-        endpoints = np.array(endpoints)
+        # rolling_counts = \
+        #     np.array([
+        #         np.searchsorted(sorted_reads, right, side="right") 
+        #         - np.searchsorted(sorted_reads, left, side="right")
+        #         for left,right in endpoints
+        #     ])
+        # rolling_counts = np.array(rolling_counts)
+        # endpoints = np.array(endpoints)
+
+        rolling_counts = np.zeros(len(endpoints))
+        for i,endpoint in enumerate(endpoints):
+            left, right = endpoint
+            left_idx = np.searchsorted(sorted_reads, left, side="right")
+            right_idx = np.searchsorted(sorted_reads, right, side="right")
+            rolling_counts[i] = right_idx - left_idx
+            sorted_reads = sorted_reads[left_idx:]
+
         return rolling_counts, endpoints
 
 
@@ -313,7 +337,7 @@ class ReadFilterRef:
             remove_regions.append( (remove_start, remove_end) )
 
         read_positions, new_genome_length = self.remove_reads_by_region(read_positions, genome_length, remove_regions)
-        
+          
         binned_reads = self.bin_reads(read_positions, genome_length, bin_size)
         return read_positions, new_genome_length
 
@@ -744,18 +768,26 @@ class CoPTRRef:
             log2_ptrs.append(log2_ptr)
             read_locs_list.append(np.sort(read_positions / length))
 
-        # update replication origin
-        ori, ter = self.update_ori_ter(log2_ptrs, read_locs_list)
-        # update ptrs
-        new_log2_ptrs = self.update_ptrs(ori, ter, log2_ptrs, read_locs_list)
+        if len(read_locs_list) > 1:
+            # update replication origin
+            ori, ter = self.update_ori_ter(log2_ptrs, read_locs_list)
+            # update ptrs
+            log2_ptrs = self.update_ptrs(ori, ter, log2_ptrs, read_locs_list)
 
         n = 0
         for i,cm in enumerate(coverage_maps):
             if cm.sample_id in sample_ids:
-                estimates[i].ori_estimate = ori
-                estimates[i].ter_estimate = ter
-                estimates[i].estimate = new_log2_ptrs[n]
+                # sanity check that the ptr estimate is good
+                if np.abs(log2_ptrs[n] - 4) < 1e-4:
+                    estimates[i].ori_estimate = ori
+                    estimates[i].ter_estimate = ter
+                    estimates[i].estimate = np.nan
+                else:
+                    estimates[i].ori_estimate = ori
+                    estimates[i].ter_estimate = ter
+                    estimates[i].estimate = log2_ptrs[n]
                 n += 1
+                print(cm.sample_id, estimates[i].estimate)
 
         return estimates
 
@@ -856,6 +888,7 @@ def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads, plot_fol
             A dictionary with key reference genome id and value
             a list of CoPTRRefEstimate for that reference genome.
     """
+    print_info("CoPTRRef", "checking reference genomes")
     coptr_ref_estimates = {}
     coptr_ref = CoPTRRef(min_reads, min_cov)
 
@@ -874,6 +907,7 @@ def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads, plot_fol
 
     else:
         for ref_id in sorted(coverage_maps):
+
             coptr_ref_estimates[ref_id] = coptr_ref.estimate_ptrs(coverage_maps[ref_id])
 
             for sample,est in zip(coverage_maps[ref_id], coptr_ref_estimates[ref_id]):
