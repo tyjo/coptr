@@ -69,9 +69,9 @@ class PoissonPCA:
         loss_fn = lambda Wx : -self.log_likelihood(X, Wx.reshape(X.shape[0], V.shape[0]), V)
         grad_fn = lambda Wx : -self.grad_W(X, Wx.reshape(X.shape[0], V.shape[0]), V).flatten()
         # these are handled by the minimizer
-        np.seterr(overflow="ignore")
+        np.seterr(over="ignore")
         res = scipy.optimize.minimize(loss_fn, np.copy(W).flatten(), jac=grad_fn, method="CG")
-        np.seterr(overflow="warn")
+        np.seterr(over="warn")
         return res.x.reshape(X.shape[0], V.shape[0])
 
 
@@ -88,30 +88,6 @@ class PoissonPCA:
                 The current estimate of V
         """
         return self.update_W(X.T, V.T, W.T).T
-
-
-    def update_WV(self, X, W, V):
-        def loss_fn(WVT_flat):
-            W_est = WVT_flat[:W.size].reshape(W.shape)
-            V_est = WVT_flat[W.size:].reshape(V.T.shape).T
-            return -self.log_likelihood(X, W_est, V_est)
-
-        def grad_fn(WVT_flat):
-            W_est = WVT_flat[:W.size].reshape(W.shape)
-            V_est = WVT_flat[W.size:].reshape(V.T.shape).T
-            grad_W = self.grad_W(X, W_est, V_est)
-            grad_V = self.grad_V(X, W_est, V_est)
-            return np.vstack((grad_W, grad_V.T)).flatten()
-
-        WV = np.vstack((W, V.T))
-        res = scipy.optimize.minimize(loss_fn, WV.flatten(), jac=grad_fn, method="CG")
-        #print(res.fun)
-        #quit()
-        WV = res.x.reshape(WV.shape)
-        W = WV[:W.shape[0]]
-        V = WV[W.shape[0]:].T
-        return W,V
-
 
 
     def log_likelihood(self, X, W, V):
