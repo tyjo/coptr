@@ -169,7 +169,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
         parser.add_argument("out_file", help="Filename to store PTR table.")
         parser.add_argument("--min-reads", type=float, help="Minimum number of reads required to compute a PTR (default 5000).", default=5000)
-        parser.add_argument("--min-cov", type=float, help="Fraction of nonzero 10Kb bins required to compute a PTR (default 0.75).", default=0.75)
+        parser.add_argument("--min-cov", type=float, help="Fraction of nonzero bins required to compute a PTR (default 0.75).", default=0.75)
         parser.add_argument("--min-samples", type=float, help="CoPTRContig only. Minimum number of samples required to reorder bins (default 5).", default=5)
         parser.add_argument("--threads", type=int, help="Number of threads to use (default 1).", default=1)
         parser.add_argument("--plot", default=None, help="Plot model fit and save the results.")
@@ -214,6 +214,11 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
             f.write("\n")
 
             for genome_id in sorted(results_ref):
+                # don't write rows without estimates
+                estimates = [result.estimate for result in results_ref[genome_id]]
+                if np.all(np.isnan(estimates)):
+                    continue
+
                 f.write(genome_id)
                 for idx,result in enumerate(sorted(results_ref[genome_id], key=lambda x: x.sample_id)):
                     if result.sample_id != sample_ids[idx]:
@@ -225,6 +230,11 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                 f.write("\n")
 
             for genome_id in sorted(results_contig):
+                # don't write rows without estimates
+                estimates = [result.estimate for result in results_contig[genome_id]]
+                if np.all(np.isnan(estimates)):
+                    continue
+
                 f.write(genome_id)
                 for idx,result in enumerate(sorted(results_contig[genome_id], key=lambda x: x.sample_id)):
                     if result.sample_id != sample_ids[idx]:

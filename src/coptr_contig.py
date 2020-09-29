@@ -414,7 +414,7 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
         x2 = np.linspace(0, 1, emp_probs.size)
         y = np.array([m*xi + b for xi in x2])
         y = np.power(2, y)
-        ax[1].scatter(x2, emp_probs)
+        ax[1].scatter(x2, emp_probs, c="C1")
         ax[1].plot(x2, y, c="black", linewidth=3)
         ax[1].set_yscale("log", base=2)
         ax[1].set_ylabel("Probability")
@@ -466,7 +466,7 @@ def estimate_ptrs_coptr_contig(coverage_maps, min_reads, min_samples, threads, p
                 estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(coverage_maps[ref_id], return_bins=True)
                 plot_fit(estimates, parameters, coverage_maps[ref_id], reordered_bins, plot_folder)
             else:
-                estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(coverage_maps[ref_id])
+                estimates = coptr_contig.estimate_ptrs(coverage_maps[ref_id])
             coptr_contig_estimates[ref_id] = estimates
     else:
         # workers for multiprocessing
