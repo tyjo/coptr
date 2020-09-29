@@ -228,11 +228,14 @@ class ReadFilterRef:
                 Each tuple gives the left (inclusive) and right (exclusive) 
                 end point of each bin.
         """
+        # print("rolling")
         step = math.ceil(bin_size/100)
         s = read_positions.size
 
         sorted_reads = np.sort(read_positions)
         endpoints = np.array([(i, i+bin_size) for i in range(0, genome_length, step)])
+        # print(len(endpoints))
+        # print(sorted_reads.size)
 
         # rolling_counts = \
         #     np.array([
@@ -243,13 +246,11 @@ class ReadFilterRef:
         # rolling_counts = np.array(rolling_counts)
         # endpoints = np.array(endpoints)
 
-        rolling_counts = np.zeros(len(endpoints))
-        for i,endpoint in enumerate(endpoints):
-            left, right = endpoint
-            left_idx = np.searchsorted(sorted_reads, left, side="right")
-            right_idx = np.searchsorted(sorted_reads, right, side="right")
-            rolling_counts[i] = right_idx - left_idx
-            sorted_reads = sorted_reads[left_idx:]
+        left_endpoints = [e[0] for e in endpoints]
+        right_endpoints = [e[1] for e in endpoints]
+        left_idx = np.searchsorted(sorted_reads, left_endpoints, side="right")
+        right_idx = np.searchsorted(sorted_reads, right_endpoints, side="right")
+        rolling_counts = right_idx - left_idx
 
         return rolling_counts, endpoints
 
@@ -337,7 +338,7 @@ class ReadFilterRef:
             remove_regions.append( (remove_start, remove_end) )
 
         read_positions, new_genome_length = self.remove_reads_by_region(read_positions, genome_length, remove_regions)
-          
+        
         binned_reads = self.bin_reads(read_positions, genome_length, bin_size)
         return read_positions, new_genome_length
 
@@ -787,6 +788,8 @@ class CoPTRRef:
                     estimates[i].ter_estimate = ter
                     estimates[i].estimate = log2_ptrs[n]
                 n += 1
+
+        print_info("CoPTRRef", "finished {}".format(genome_id))
 
         return estimates
 
