@@ -689,6 +689,7 @@ class CoverageMapContig(CoverageMap):
             length = self.contig_lengths[contig_id]
             if length >= 11000: total_length += length
 
+        # bound bin size below by 1000
         bin_size = np.max((1000, total_length / target_bins))
 
         # want a number divisible by 100 for downstream steps
