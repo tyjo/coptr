@@ -322,13 +322,12 @@ class BamProcessor:
         # single-mapped reads can be used to set a prior
         # on the proportios of each genome in the sample
         prior_counts = np.zeros(len(genome_ids))
-        # where to add the next entry in X
-        current_row = 0
 
         # fields to construct a sparse csr_matrix
         data = []
         indices = []
         indptr = [0]
+        nreads = 0
         for read_id in sorted(read_container.reads):
             ref_names, ref_positions = read_container.get_mappings(read_id)
             ref_genomes = [ref_seq_genome_id[r] for r in ref_names]
@@ -353,11 +352,12 @@ class BamProcessor:
                     idx = bisect.bisect_left(genome_ids, genome_id)
                     indices.append(idx)
                     data.append(1)
+                nreads += 1
                 indptr.append(len(indices))
-                current_row += 1
+
 
         if len(data) > 0:
-            X = csr_matrix((data, indices, indptr))
+            X = csr_matrix((data, indices, indptr), shape=(nreads, len(genome_ids)))
 
             print_info("BamProcessor", "assigning multi-mapped reads")
             read_assigner = ReadAssigner(X, prior_counts)
