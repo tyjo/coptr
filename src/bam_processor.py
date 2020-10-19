@@ -284,7 +284,7 @@ class BamProcessor:
         return ref_seq_lengths
 
 
-    def assign_multimapped_reads(self, read_container, lengths):
+    def assign_multimapped_reads(self, read_container, lengths, max_alignments):
         """Assign multiple mapped reads to a single genome.
 
         Parameters
@@ -338,7 +338,7 @@ class BamProcessor:
                 continue
 
             # discard reads that map to too many genomes
-            if len(ref_genomes) >= 20:
+            if len(ref_genomes) >= max_alignments:
                 discarded_reads.add(read_id)
                 continue
 
@@ -409,7 +409,7 @@ class BamProcessor:
 
 
 
-    def process_bam(self, bam_file):
+    def process_bam(self, bam_file, max_alignments):
         """Extract read coordinates along each reference sequence.
 
         Parameters
@@ -433,7 +433,7 @@ class BamProcessor:
         # assign multiply mapped reads to reference sequences
         # 1. dict[ref_seq_id] -> int (read position)
         # 2. dict[ref_seq_id] -> genome_id
-        read_positions, ref_seq_genome_id = self.assign_multimapped_reads(reads, lengths)
+        read_positions, ref_seq_genome_id = self.assign_multimapped_reads(reads, lengths, max_alignments)
 
         # fill in read_positions with remaining sequence ids
         for seq_id in lengths:
@@ -624,6 +624,17 @@ class CoverageMapRef(CoverageMap):
         return reads
 
 
+    def count_reads(self):
+        """Return number of mapped reads.
+
+        Returns
+        -------
+            nreads : int
+                Number of reads
+        """
+        return np.array(self.read_positions).size
+
+
 
 class CoverageMapContig(CoverageMap):
     """Data structure to store read positions from assemblies.
@@ -770,6 +781,20 @@ class CoverageMapContig(CoverageMap):
             self.binned_reads[contig_id] = bin_counts
 
         return self.binned_reads[contig_id]
+
+
+    def count_reads(self):
+        """Return number of mapped reads.
+
+        Returns
+        -------
+            nreads : int
+                Number of reads
+        """
+        nreads = 0
+        for contig_id in self.contig_ids:
+            nreads += np.array(self.contig_read_positions[contig_id]).size
+        return nreads
 
 
     def passed_qc(self):

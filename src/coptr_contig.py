@@ -7,6 +7,7 @@ import math
 import multiprocessing as mp
 import numpy as np
 import os.path
+import pickle as pkl
 import scipy.stats
 import sys
 
@@ -86,16 +87,6 @@ class CoPTRContig:
                 An upper bound on read counts in bins
 
         """
-        # median_read_count = np.median(binned_counts[binned_counts != 0])
-        # pois_lower = scipy.stats.poisson(0.5*median_read_count)
-        # pois_upper = scipy.stats.poisson(2*median_read_count)
-        # for i in range(2, 17):
-        #     m = 0.5*i
-        #     lower_bound = (1./m)*median_read_count
-        #     upper_bound = m*median_read_count
-        #     if pois_upper.cdf(upper_bound) > 0.99 and (1 - pois_lower.cdf(lower_bound)) > 0.99:
-        #         return lower_bound, upper_bound
-        # return lower_bound, upper_bound
 
         median = np.log2(np.median(binned_counts[binned_counts != 0]))
 
@@ -103,7 +94,7 @@ class CoPTRContig:
         std = np.max((1, std))
 
         norm = scipy.stats.norm()
-        m = norm.ppf(0.95)
+        m = norm.ppf(0.925)
 
         lower_bound = np.power(2, median - m*std)
         upper_bound = np.power(2, median + m*std)
@@ -153,13 +144,13 @@ class CoPTRContig:
         return A
 
 
-    def estimate_slope_intercept(self, bin_probs):
+    def estimate_slope_intercept(self, bin_log_probs):
         """Estimate the slope along reordering bins using least squares.
 
         Parameters
         ----------
-            bin_probs : np.array
-                The observed probability that a read lands in a 10Kb bin.
+            bin_log_probs : np.array
+                The observed probability that a read lands in a bin.
 
         Returns
         -------
@@ -168,15 +159,91 @@ class CoPTRContig:
             b : float
                 The intercept
         """
-        rng = np.linspace(0, 1, bin_probs.size)
-        y = bin_probs
+        rng = np.linspace(0, 1, bin_log_probs.size)
+        y = bin_log_probs
         x = np.ones((y.size, 2))
         x[:,0] = rng
 
         sol, residuals, rank, s = np.linalg.lstsq(x, y, rcond=None)
         m,b = sol
 
-        return m,b,residuals[0]
+        pred = m*rng + b
+        residuals = y - pred
+
+        return m,b,residuals
+
+
+    def compute_log_likelihood(self, log2_ptr, binned_counts):
+        """Compute the log likelihood of reordered bin probabilities given a log2(PTR).
+
+        Parameters
+        ----------
+            log2_ptr : float
+                The Log2(PTR)
+            binned_counts : np.array
+                Binned read counts along the genome
+
+        Returns
+        -------
+            log_lk : float
+                The log likelihood
+        """
+        # origin and terminus are at positions 0 and 1
+        ori_loc = 0
+        ter_loc = 1
+
+        x = np.linspace(0, 1, binned_counts.size)
+        # compute normalized probabilities
+        log_probs = np.array([log2_ptr*xi for xi in x])
+        log_norm = np.log2(np.power(2, log_probs).sum())
+        log_probs -= log_norm
+
+        log_lk = (binned_counts*log_probs).sum()
+
+        return log_lk
+
+
+    def estimate_ptr_maximum_likelihood(self, binned_counts):
+        """Compute maximum likelihood estimates of log2(PTR) gived observed reads.
+
+        Parameters
+        ----------
+            binned_counts : np.array
+                Binned read counts for a genome
+
+        Returns
+        -------
+            log2_ptr : float
+                The maximum likelihood log2(PTR) estimate
+            intercept : float
+                Probability a reads is in the leftmost bin
+            log_lk : float
+                The log likelihood
+
+        """
+        f = lambda x: -self.compute_log_likelihood(x, binned_counts)
+        x0 = 0.5
+
+        res = scipy.optimize.minimize_scalar(f, method="brent")
+        log2_ptr = res.x
+
+        x = np.linspace(0, 1, binned_counts.size)
+        # compute normalized probabilities
+        log_probs = np.array([log2_ptr*xi for xi in x])
+        log_norm = np.log2(np.power(log_probs, 2).sum())
+        log_probs -= log_norm
+        probs = np.power(2, log_probs)
+        intercept = probs[0]
+
+        log_lk = -f(log2_ptr)
+
+        # the orientation of the bins is arbitrary,
+        # so let's orient with a positive slope
+        if log2_ptr < 0:
+            intercept = log2_ptr + intercept
+            log2_ptr = np.abs(log2_ptr)
+
+        return log2_ptr, intercept, log_lk
 
 
     def estimate_ptrs(self, coverage_maps, return_bins=False):
@@ -296,14 +363,6 @@ class CoPTRContig:
         filter_rows = np.sum(A == -1, axis=1) > 0
         A = A[np.logical_not(filter_rows), :]
 
-        # remove ultra low/high coverage bins
-        # mean_cov = (A / A.sum(axis=0, keepdims=True)).sum(axis=1)
-        # sorted_idx = np.argsort(mean_cov)
-        # A = A[sorted_idx,:]
-        # lb = int(0.05*col.size)
-        # ub = int(0.95*col.size)
-        # A = A[lb:ub,:]
-
         poisson_pca = PoissonPCA()
         W,V = poisson_pca.pca(A,k=1)
         sorted_idx = np.argsort(W.flatten())
@@ -311,13 +370,11 @@ class CoPTRContig:
         reads = A.sum(axis=0)
 
         for j,col in enumerate(A.T):
-            col = col[col != 0]
-            col = np.log2(col / col.sum())
-            # lb = 0
-            # ub = int(col.size)
             lb = int(0.05*col.size)
             ub = int(0.95*col.size)
-            m,b,residual = self.estimate_slope_intercept(col[lb:ub])
+            col = col[lb:ub]
+
+            m,b,log_lk = self.estimate_ptr_maximum_likelihood(col)
 
             if m < 0:
                 flip = True
@@ -329,15 +386,17 @@ class CoPTRContig:
             # the sign of the slope depends on the orientation,
             # so let's look at positive slopes only
             m = np.abs(m)
-            estimate = CoPTRContigEstimate(bam_files[j], genome_ids[j], sample_ids[j], m, reads[j], 1)
+            estimate = CoPTRContigEstimate(bam_files[j], genome_ids[j], sample_ids[j], m, reads[j], col.sum())
             estimates.append(estimate)
 
             parameters.append((m, b))
 
-            bc = np.power(2,col)
+            #bc = np.power(2,col)
+            bc = col
             if flip:
                 bc = np.flip(bc)
             binned_counts.append(bc)
+
 
         print_info("CoPTRContig", "finished {}".format(genome_id))
 
@@ -409,15 +468,16 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
 
         # plot model fit
         emp_probs = rbins / rbins.sum()
-        m,b = p # slope intercept
+        m,b = p # slope intercept in log space
 
         x2 = np.linspace(0, 1, emp_probs.size)
         y = np.array([m*xi + b for xi in x2])
         y = np.power(2, y)
+        y /= y.sum()
         ax[1].scatter(x2, emp_probs, c="C1")
         ax[1].plot(x2, y, c="black", linewidth=3)
         ax[1].set_yscale("log", base=2)
-        ax[1].set_ylabel("Probability")
+        ax[1].set_ylabel("Log2 Probability")
         ax[1].set_xlabel("Reordered Bins")
         ax[1].set_title("\nslope={:.3f} (Reads = {})".format(m, int(estimate.nreads)))
 
@@ -426,20 +486,17 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
         plt.close()
         nplots += 1
 
-    # if nplots > 0:
-    #     quit()
 
 
-
-
-def estimate_ptrs_coptr_contig(coverage_maps, min_reads, min_samples, threads, plot_folder=None):
+def estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder, min_reads, min_samples, threads, plot_folder=None):
     """Estimate Peak-to-Trough ratios across samples.
 
     Parameters
     ----------
-        coverage_maps : dict[str -> list[CoverageMap]]
-            A dictionary with key reference genome id and value
-            a list of coverage maps for that reference genome
+        assembly_genome_ids : set[str]
+            A list of genome ids to estimate PTRs.
+        grouped_coverage_map_folder : str
+            Path to folder containing coverage maps grouped by genome.
         min_reads : float
             Minumum read count after filtering to estimate PTR
         min_samples : float
@@ -461,18 +518,41 @@ def estimate_ptrs_coptr_contig(coverage_maps, min_reads, min_samples, threads, p
 
     total_reads = 0
     if threads == 1:
-        for ref_id in coverage_maps:
+        for ref_id in sorted(assembly_genome_ids):
+            coverage_maps = []
+            with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
+                try:
+                    while True:
+                        coverage_maps.append(pkl.load(f))
+                except EOFError:
+                    pass
+
             if plot_folder is not None:
-                estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(coverage_maps[ref_id], return_bins=True)
-                plot_fit(estimates, parameters, coverage_maps[ref_id], reordered_bins, plot_folder)
+                estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(coverage_maps, return_bins=True)
+                plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder)
             else:
-                estimates = coptr_contig.estimate_ptrs(coverage_maps[ref_id])
+                estimates = coptr_contig.estimate_ptrs(coverage_maps)
             coptr_contig_estimates[ref_id] = estimates
+
     else:
         # workers for multiprocessing
         pool = mp.Pool(threads)
-        flat_coverage_maps = [(ref_id, coverage_maps[ref_id], plot_folder) for ref_id in coverage_maps]
-        flat_results = pool.map(coptr_contig._parallel_helper, flat_coverage_maps)
-        coptr_contig_estimates = dict(flat_results)
+        coverage_maps = {}
+
+        for i,ref_id in enumerate(sorted(assembly_genome_ids)):
+            coverage_maps[ref_id] = []
+            with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
+                try:
+                    while True:
+                        coverage_maps[ref_id].append(pkl.load(f))
+                except EOFError:
+                    pass
+
+            if (i % threads == 0 and i > 0) or i == len(assembly_genome_ids) - 1:
+                flat_coverage_maps = [(ref_id, coverage_maps[ref_id], plot_folder) for ref_id in coverage_maps]
+                flat_results = pool.map(coptr_contig._parallel_helper, flat_coverage_maps)
+                coptr_contig_estimates.update(dict(flat_results))
+
+                coverage_maps = {}
 
     return coptr_contig_estimates

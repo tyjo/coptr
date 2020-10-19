@@ -7,6 +7,7 @@ import math
 import multiprocessing as mp
 import numpy as np
 import os.path
+import pickle as pkl
 import scipy.optimize
 import scipy.stats
 import sys
@@ -228,23 +229,11 @@ class ReadFilterRef:
                 Each tuple gives the left (inclusive) and right (exclusive) 
                 end point of each bin.
         """
-        # print("rolling")
         step = math.ceil(bin_size/100)
         s = read_positions.size
 
         sorted_reads = np.sort(read_positions)
         endpoints = np.array([(i, i+bin_size) for i in range(0, genome_length, step)])
-        # print(len(endpoints))
-        # print(sorted_reads.size)
-
-        # rolling_counts = \
-        #     np.array([
-        #         np.searchsorted(sorted_reads, right, side="right") 
-        #         - np.searchsorted(sorted_reads, left, side="right")
-        #         for left,right in endpoints
-        #     ])
-        # rolling_counts = np.array(rolling_counts)
-        # endpoints = np.array(endpoints)
 
         left_endpoints = [e[0] for e in endpoints]
         right_endpoints = [e[1] for e in endpoints]
@@ -867,14 +856,15 @@ def plot_fit(coptr_ref_est, read_positions, genome_length, min_reads, min_cov, p
 
 
 
-def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads, plot_folder=None):
+def estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, min_reads, min_cov, threads, plot_folder=None):
     """Estimate Peak-to-Trough ratios across samples.
 
     Parameters
     ----------
-        coverage_maps : dict[str -> list[CoverageMap]]
-            A dictionary with key reference genome id and value
-            a list of coverage maps for that reference genome
+        ref_genome_ids : set[str]
+            A list of genome ids to estimate PTRs.
+        grouped_coverage_map_folder : str
+            Path to folder containing coverage maps grouped by genome.
         min_reads : float
             Minumum read count after filtering to estimate PTR
         frac_nonzero : float
@@ -897,22 +887,44 @@ def estimate_ptrs_coptr_ref(coverage_maps, min_reads, min_cov, threads, plot_fol
     if threads > 1:
         # workers for multiprocessing
         pool = mp.Pool(threads)
-        flat_coverage_maps = [(ref_id, coverage_maps[ref_id]) for ref_id in coverage_maps]
-        flat_results = pool.map(coptr_ref._parallel_helper, flat_coverage_maps)
-        coptr_ref_estimates = dict(flat_results)
+        coverage_maps = {}
 
-        for ref_id in sorted(coverage_maps):
-            for sample,est in zip(coverage_maps[ref_id], coptr_ref_estimates[ref_id]):
-                 # only plot samples with a PTR estimate
-                 if plot_folder is not None and not np.isnan(est.estimate):
-                     plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
+        for i,ref_id in enumerate(sorted(ref_genome_ids)):
+            coverage_maps[ref_id] = []
+            with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
+                try:
+                    while True:
+                        coverage_maps[ref_id].append(pkl.load(f))
+                except EOFError:
+                    pass
+
+            if (i % threads == 0 and i > 0) or i == len(ref_genome_ids) - 1:
+                flat_coverage_maps = [(ref_id, coverage_maps[ref_id]) for ref_id in coverage_maps]
+                flat_results = pool.map(coptr_ref._parallel_helper, flat_coverage_maps)
+                coptr_ref_estimates.update(dict(flat_results))
+
+                for ref_id in sorted(coverage_maps):
+                    for sample,est in zip(coverage_maps[ref_id], coptr_ref_estimates[ref_id]):
+                         # only plot samples with a PTR estimate
+                         if plot_folder is not None and not np.isnan(est.estimate):
+                             plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
+
+                coverage_maps = {}
 
     else:
-        for ref_id in sorted(coverage_maps):
+        for ref_id in sorted(ref_genome_ids):
+            # load coverage maps
+            coverage_maps = []
+            with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
+                try:
+                    while True:
+                        coverage_maps.append(pkl.load(f))
+                except EOFError:
+                    pass
 
-            coptr_ref_estimates[ref_id] = coptr_ref.estimate_ptrs(coverage_maps[ref_id])
+            coptr_ref_estimates[ref_id] = coptr_ref.estimate_ptrs(coverage_maps)
 
-            for sample,est in zip(coverage_maps[ref_id], coptr_ref_estimates[ref_id]):
+            for sample,est in zip(coverage_maps, coptr_ref_estimates[ref_id]):
                  # only plot samples with a PTR estimate
                  if plot_folder is not None and not np.isnan(est.estimate):
                      plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)

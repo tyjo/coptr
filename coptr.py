@@ -27,6 +27,7 @@ command: index            create a bowtie2 index for a reference database
          estimate         estimate PTRs from coverage maps
 '''
         )
+        self.default_bt2_k = 10
 
         if len(sys.argv[1:]) < 1:
             parser.print_help()
@@ -80,7 +81,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("--threads", type=int, default=1, 
             help="Number of threads for bowtie2 mapping."
         )
-        parser.add_argument("--bt2-k", type=int, default=20,
+        parser.add_argument("--bt2-k", type=int, default=self.default_bt2_k,
             help="Number of alignments to report. Passed to -k flag of bowtie2.",
 
         )
@@ -123,6 +124,10 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
         parser.add_argument("--check-regex", action="store_true", default=False,
             help="Check the regular expression by counting reference genomes without processing."
         )
+        parser.add_argument("--bt2-k", type=int, default=self.default_bt2_k,
+            help="Maximum number of alignments.",
+
+        )
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -150,7 +155,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                 if args.check_regex:
                     continue
 
-                coverage_maps = bam_processor.process_bam(fpath)
+                coverage_maps = bam_processor.process_bam(fpath, args.bt2_k)
                 with open(os.path.join(args.out_folder, get_fastq_name(f) + ".cm.pkl"), "wb") as f:
                     pkl.dump(coverage_maps, f)
 
@@ -163,7 +168,7 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
     def estimate(self):
         parser = argparse.ArgumentParser(usage=
-'''usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] [--plot OUTFOLDER] coverage-map-folder out-file
+'''usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] [--plot OUTFOLDER] [--grouped-coverage-maps GROUPED_COVERAGE_MAPS] coverage-map-folder out-file
 '''
         )
         parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
@@ -179,36 +184,70 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
             exit(1)
 
         args = parser.parse_args(sys.argv[2:])
+        sample_ids = set()
         # reference genome id -> list of coverage maps
         coverage_maps_ref = {}
         coverage_maps_contig = {}
-        sample_ids = set()
+        ref_genome_ids = set()
+        assembly_genome_ids = set()
 
+
+        grouped_coverage_map_folder = os.path.join(args.coverage_map_folder, "coverage-maps-genome")
+        if not os.path.exists(grouped_coverage_map_folder):
+            os.mkdir(grouped_coverage_map_folder)
+
+        print_info("CoPTR", "grouping reads by reference genome")
+        print_info("CoPTR", "saving to " + grouped_coverage_map_folder)
+
+        # first construct a list of genome_ids for ptr estimates
         for f in sorted(os.listdir(args.coverage_map_folder)):
             fname, ext = os.path.splitext(f)
-            if ext == ".pkl":
-                fpath = os.path.join(args.coverage_map_folder, f)
-                coverage_maps = pkl.load(open(fpath, "rb"))
+            if ext != ".pkl": continue
+            fpath = os.path.join(args.coverage_map_folder, f)
 
-                # split into maps from assemblies and compete reference genomes
+            print(fname)
+
+            with open(fpath, "rb") as file:
+                coverage_maps = pkl.load(file)
+
                 for ref_id in coverage_maps:
-                    if not coverage_maps[ref_id].is_assembly and ref_id not in coverage_maps_ref:
-                        coverage_maps_ref[ref_id] = [coverage_maps[ref_id]]
-                    elif not coverage_maps[ref_id].is_assembly:
-                        coverage_maps_ref[ref_id].append(coverage_maps[ref_id])
-                    elif coverage_maps[ref_id].is_assembly and ref_id not in coverage_maps_contig:
-                        coverage_maps_contig[ref_id] = [coverage_maps[ref_id]]
+
+                    # don't load coverage maps of species in reference database without reads
+                    if coverage_maps[ref_id].count_reads() < args.min_reads:
+                        continue
+
+                    write_mode = "ab+" if ref_id in ref_genome_ids or ref_id in assembly_genome_ids else "wb+"
+
+                    # append to genome file
+                    with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), write_mode) as tofile:
+                        pkl.dump(coverage_maps[ref_id], tofile)
+
+                    if coverage_maps[ref_id].is_assembly:
+                        assembly_genome_ids.add(ref_id)
                     else:
-                        coverage_maps_contig[ref_id].append(coverage_maps[ref_id])
+                        ref_genome_ids.add(ref_id)
+
                     sample_ids.add(coverage_maps[ref_id].sample_id)
 
-        sample_ids = sorted(list(sample_ids))
-        results_ref = estimate_ptrs_coptr_ref(coverage_maps_ref, args.min_reads, args.min_cov, threads=args.threads, plot_folder=args.plot)
-        results_contig = estimate_ptrs_coptr_contig(coverage_maps_contig, args.min_reads, args.min_samples, threads=args.threads, plot_folder=args.plot)
+                del coverage_maps
 
-        with open(args.out_file, "w") as f:
+
+        print_info("CoPTR", "done grouping by reference genome")
+
+        sample_ids = sorted(list(sample_ids))
+        results_ref = estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov, threads=args.threads, plot_folder=args.plot)
+        results_contig = estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_samples, threads=args.threads, plot_folder=args.plot)
+
+        out_file = args.out_file
+        _, ext = os.path.splitext(out_file)
+        if ext != ".csv":
+            out_file += ".csv"
+
+        print_info("CoPTR", "writing {}".format(out_file))
+
+        with open(out_file, "w") as f:
             # write the header
-            f.write("genome_id/sample_id")
+            f.write("log2(PTR):genome_id/sample_id")
             for sample_id in sample_ids:
                 f.write(",{}".format(sample_id))
             f.write("\n")
@@ -219,15 +258,12 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                 if np.all(np.isnan(estimates)):
                     continue
 
-                f.write(genome_id)
-                for idx,result in enumerate(sorted(results_ref[genome_id], key=lambda x: x.sample_id)):
-                    if result.sample_id != sample_ids[idx]:
-                        print_error("Main", "{} is missing from {}".format(sample_id, result.ref_genome))
+                f.write(genome_id + ",")
+                row = ["" for s in sample_ids]
+                for result in results_ref[genome_id]:
                     if not np.isnan(result.estimate):
-                        f.write(",{}".format(result.estimate))
-                    else:
-                        f.write(",".format(result.estimate))
-                f.write("\n")
+                        row[sample_ids.index(result.sample_id)] = str(result.estimate)
+                f.write(",".join(row) + "\n")
 
             for genome_id in sorted(results_contig):
                 # don't write rows without estimates
@@ -235,15 +271,13 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                 if np.all(np.isnan(estimates)):
                     continue
 
-                f.write(genome_id)
-                for idx,result in enumerate(sorted(results_contig[genome_id], key=lambda x: x.sample_id)):
-                    if result.sample_id != sample_ids[idx]:
-                        print_error("Main", "{} is missing from {}".format(sample_id, result.ref_genome))
+                f.write(genome_id + ",")
+                row = ["" for s in sample_ids]
+                for result in results_contig[genome_id]:
                     if not np.isnan(result.estimate):
-                        f.write(",{}".format(result.estimate))
-                    else:
-                        f.write(",".format(result.estimate))
-                f.write("\n")   
+                        row[sample_ids.index(result.sample_id)] = str(result.estimate)
+                f.write(",".join(row) + "\n")
+
 
 if __name__ == "__main__":
     ProgramOptions()

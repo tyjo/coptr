@@ -108,7 +108,7 @@ class ReadMapper:
             sub.check_call(["rm", fna_out.name])
 
 
-    def map(self, index, inputf, outfolder, paired, threads, bt2_k=20):
+    def map(self, index, inputf, outfolder, paired, threads, bt2_k):
         """Map reads from infile against reference database using bowtie2, then
         convert to a bam file.
 
@@ -163,7 +163,7 @@ class ReadMapper:
         elif os.path.isdir(inputf) and not paired:
             valid_ext = [".fastq", ".fq", ".gz"]
             files_found = 0
-            for f in os.listdir(inputf):
+            for f in sorted(os.listdir(inputf)):
                 fname,ext1 = os.path.splitext(f)
                 if ext1 == ".gz":
                     ext2 = fname.split(".")[1]
@@ -204,7 +204,7 @@ class ReadMapper:
             files_found = 0
             # file prefix -> [pair_1, pair_2]
             read_pairs = {}
-            for f in os.listdir(inputf):
+            for f in sorted(os.listdir(inputf)):
                 fname,ext1 = os.path.splitext(f)
                 if ext1 == ".gz":
                     ext2 = fname.split(".")[1]
