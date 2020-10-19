@@ -205,8 +205,6 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
             if ext != ".pkl": continue
             fpath = os.path.join(args.coverage_map_folder, f)
 
-            print(fname)
-
             with open(fpath, "rb") as file:
                 coverage_maps = pkl.load(file)
 

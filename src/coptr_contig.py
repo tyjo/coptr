@@ -239,11 +239,13 @@ class CoPTRContig:
 
         # the orientation of the bins is arbitrary,
         # so let's orient with a positive slope
+        flip = False
         if log2_ptr < 0:
             intercept = log2_ptr + intercept
             log2_ptr = np.abs(log2_ptr)
+            flip = True
 
-        return log2_ptr, intercept, log_lk
+        return log2_ptr, intercept, log_lk, flip
 
 
     def estimate_ptrs(self, coverage_maps, return_bins=False):
@@ -374,14 +376,7 @@ class CoPTRContig:
             ub = int(0.95*col.size)
             col = col[lb:ub]
 
-            m,b,log_lk = self.estimate_ptr_maximum_likelihood(col)
-
-            if m < 0:
-                flip = True
-                b = m + b
-                m = np.abs(m)
-            else:
-                flip = False
+            m,b,log_lk,flip = self.estimate_ptr_maximum_likelihood(col)
 
             # the sign of the slope depends on the orientation,
             # so let's look at positive slopes only
@@ -391,7 +386,6 @@ class CoPTRContig:
 
             parameters.append((m, b))
 
-            #bc = np.power(2,col)
             bc = col
             if flip:
                 bc = np.flip(bc)
