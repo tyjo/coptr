@@ -13,6 +13,8 @@ class PoissonPCA:
 
             X_{ij} ~ Poisson(exp( [WV]_{ij} ))
 
+        Note that missing entries are possible. Missing entries should be denoted by np.nan.
+
         Parameters
         ----------
             X : np.array
@@ -22,18 +24,24 @@ class PoissonPCA:
         """
         assert k <= X.shape[1], "k must be smaller than the number of columns of X"
         assert k > 0 and k == int(k), "k must be a positive integer"
-        assert np.all(X >= 0), "X must have nonnegative entries"
+        assert np.all(X[np.isfinite(X)] >= 0), "X must have nonnegative entries or be missing"
         X = X.astype(float)
 
         # use PCA to initialize matrices W,V
-        Xt = np.copy(X)
-        Xt[Xt == 0] = 0.1
-        u,s,vh = np.linalg.svd(np.log2(Xt))
-        u = u[:,:k]
-        s = s[:k]
-        vh = vh[:k,:]
-        W = u*s
-        V = vh
+        # initializing missing values to mean
+        # Xt = np.copy(X)
+        # Xt[Xt == 0] = 0.1
+        # for i,row in enumerate(Xt):
+        #     if np.isnan(row).sum() > 0:
+        #         Xt[i,np.isnan(row)] = np.mean(row[np.isfinite(row)])
+        # u,s,vh = np.linalg.svd(np.log2(Xt))
+        # u = u[:,:k]
+        # s = s[:k]
+        # vh = vh[:k,:]
+        # W = u*s
+        # V = vh
+        W = np.random.normal(loc=0, scale=0.1, size=(X.shape[0], k))
+        V = np.random.normal(loc=0, scale=0.1, size=(k, X.shape[1]))
 
         it = 0
         prv_log_lk = -np.inf
@@ -103,7 +111,7 @@ class PoissonPCA:
                 A k x m matrix
         """
         param = np.exp(W.dot(V))
-        return (X*W.dot(V) - param).sum()
+        return (X*W.dot(V) - param)[np.isfinite(X)].sum()
 
 
     def grad_W(self, X, W, V):
@@ -118,23 +126,11 @@ class PoissonPCA:
             V : np.array
                 A k x m matrix
         """
-        return X.dot(V.T) - np.exp(W.dot(V)).dot(V.T)
-        
-
-
-    def grad_V(self, X, W, V):
-        """Compute the gradient of the log likelihood wrt V.
-
-        Parameters
-        ----------
-            X : np.array
-                An n x m data matrix
-            W : np.array
-                An n x k matrix
-            V : np.array
-                A k x m matrix
-        """
-        return self.grad_W(X.T, V.T, W.T).T
+        Xtmp = np.copy(X)
+        # zero out rows so they do not contribute to inner product
+        Xtmp[np.isnan(X)] = 0
+        grad = Xtmp.dot(V.T) - np.exp(W.dot(V)).dot(V.T)
+        return grad
 
 
 if __name__ == "__main__":
@@ -154,12 +150,21 @@ if __name__ == "__main__":
         W = np.random.normal(loc=0, scale=1, size=(n, k))
         V = np.random.normal(loc=0, scale=1, size=(k, m))
 
-        X = np.random.poisson(np.exp(W.dot(V)))
-        print("\tmin {}".format(X.min()))
-        print("\tmax {}".format(X.max()))
-        print("\tmean {}".format(X.mean()))
-        print("\tstd {}".format(X.std()))
+        X = np.random.poisson(np.exp(W.dot(V))).astype(float)
 
-        West, Vest = ppca.factor(X, k)
+        coords = [(i,j) for i in range(n) for j in range(m)]
+        nmissing = int(0.25*X.size)
+        for l in range(nmissing):
+            coord = coords[np.random.randint(len(coords))]
+            X[coord] = np.nan
+
+
+        X_finite = X[np.isfinite(X)]
+        print("\tmin {}".format(X_finite.min()))
+        print("\tmax {}".format(X_finite.max()))
+        print("\tmean {}".format(X_finite.mean()))
+        print("\tstd {}".format(X_finite.std()))
+
+        West, Vest = ppca.pca(X, k)
 
     print("passed!")

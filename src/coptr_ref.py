@@ -83,11 +83,16 @@ class ReadFilterRef:
         # don't filter if there are too few reads
         # just return that the sample failed QC
         if len(read_positions) < self.min_reads:
-            return np.array([]), genome_length, QCResult(0, len(read_positions), 0, False)
+            return np.array([]), genome_length, QCResult(-1, len(read_positions), -1, False)
 
         bin_size = self.compute_bin_size(genome_length)
         read_positions = np.copy(read_positions)
         filtered_read_positions, filtered_genome_length = self.filter_reads_phase1(read_positions, genome_length, bin_size)
+        # more than 25% of the genome is removed
+        frac_removed = 1 - filtered_genome_length / genome_length
+        if  frac_removed > 0.25:
+            return np.array(filtered_read_positions), filtered_genome_length, QCResult(-1, filtered_read_positions.size, frac_removed, False)
+
         filtered_read_positions, filtered_genome_length = self.filter_reads_phase2(filtered_read_positions, filtered_genome_length, bin_size)
         qc_result = self.quality_check(filtered_read_positions, filtered_genome_length, genome_length, bin_size, self.min_reads, self.min_cov)
         return filtered_read_positions, filtered_genome_length, qc_result
@@ -855,8 +860,19 @@ def plot_fit(coptr_ref_est, read_positions, genome_length, min_reads, min_cov, p
 
 
 
+def load_coverage_maps(file_handle, ref_id):
+    coverage_maps = []
+    try:
+        while True:
+            coverage_maps.append(pkl.load(file_handle))
 
-def estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, min_reads, min_cov, threads, plot_folder=None):
+    except EOFError:
+        pass
+    return coverage_maps
+
+
+
+def estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, min_reads, min_cov, threads, plot_folder=None, mem_limit=None):
     """Estimate Peak-to-Trough ratios across samples.
 
     Parameters
@@ -873,6 +889,10 @@ def estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, min_rea
             Number of threads for parallel computation
         plot_folder : str
             If not None, plots of fitted model are generated and saved here
+        mem_limit : int
+            Limit amount of coverage maps loaded into memory at once.
+            Breaks samples per genome into batches. Limit is specified in GB.
+            Works only in single-threaded mode.
 
     Returns
     -------
@@ -890,13 +910,8 @@ def estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, min_rea
         coverage_maps = {}
 
         for i,ref_id in enumerate(sorted(ref_genome_ids)):
-            coverage_maps[ref_id] = []
             with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
-                try:
-                    while True:
-                        coverage_maps[ref_id].append(pkl.load(f))
-                except EOFError:
-                    pass
+                coverage_maps[ref_id] = load_coverage_maps(f, ref_id)
 
             if (i % threads == 0 and i > 0) or i == len(ref_genome_ids) - 1:
                 flat_coverage_maps = [(ref_id, coverage_maps[ref_id]) for ref_id in coverage_maps]
@@ -907,26 +922,20 @@ def estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, min_rea
                     for sample,est in zip(coverage_maps[ref_id], coptr_ref_estimates[ref_id]):
                          # only plot samples with a PTR estimate
                          if plot_folder is not None and not np.isnan(est.estimate):
-                             plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
+                            plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
 
                 coverage_maps = {}
 
     else:
         for ref_id in sorted(ref_genome_ids):
-            # load coverage maps
-            coverage_maps = []
             with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
-                try:
-                    while True:
-                        coverage_maps.append(pkl.load(f))
-                except EOFError:
-                    pass
+                coverage_maps = load_coverage_maps(f, ref_id)
 
             coptr_ref_estimates[ref_id] = coptr_ref.estimate_ptrs(coverage_maps)
 
             for sample,est in zip(coverage_maps, coptr_ref_estimates[ref_id]):
                  # only plot samples with a PTR estimate
                  if plot_folder is not None and not np.isnan(est.estimate):
-                     plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
+                    plot_fit(est, sample.read_positions, sample.length, min_reads, min_cov, plot_folder)
 
     return coptr_ref_estimates

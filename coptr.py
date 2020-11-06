@@ -18,14 +18,14 @@ class ProgramOptions:
     def __init__(self):
         parser = argparse.ArgumentParser(
             description="Compute PTRs from complete reference genomes and assemblies.",
-            usage='''coptr.py <command> [options]
+            usage="""coptr.py <command> [options]
 
 command: index            create a bowtie2 index for a reference database
          map              map reads against a reference database
          merge            merge BAM files from reads mapped to multiple indexes
          extract          compute coverage maps from bam files
          estimate         estimate PTRs from coverage maps
-'''
+"""
         )
         self.default_bt2_k = 10
 
@@ -46,9 +46,9 @@ command: index            create a bowtie2 index for a reference database
     def index(self):
         parser = argparse.ArgumentParser(usage="coptr.py index [-h] [--bt2-bmax BT2_BMAX] [--bt2-dcv BT2_DCV] [--bt2-threads BT2_THREADS] [--bt2-packed] ref-fasta index-out")
         parser.add_argument("ref_fasta", help=
-'''File or folder containing fasta to index. If a folder, the extension for each
-fasta must be one of [.fasta, .fna, .fa]
-'''
+        """File or folder containing fasta to index. If a folder, the extension for each
+        fasta must be one of [.fasta, .fna, .fa]
+        """
         )
         parser.add_argument("index_out", help="Filepath to store index.")
         parser.add_argument("--bt2-bmax", default=None, help="Set the --bmax arguement for bowtie2-build. Used to control memory useage.")
@@ -69,9 +69,9 @@ fasta must be one of [.fasta, .fna, .fa]
         parser = argparse.ArgumentParser(usage="coptr.py map [-h] [--threads INT] [--bt2-k INT] [--paired] index input out-folder")
         parser.add_argument("index", help="Name of database index.")
         parser.add_argument("input", help=
-'''File or folder containing fastq reads to map. If a folder, the extension for
-each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
-'''
+        """File or folder containing fastq reads to map. If a folder, the extension for
+        each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
+        """
         )
         parser.add_argument("out_folder",
             help="Folder to save mapped reads. BAM files are output here."
@@ -99,8 +99,8 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
     def merge(self):
         parser = argparse.ArgumentParser(usage="coptr.py merge [-h] in-bam1 in-bam2 ... in-bamN out-bam")
         parser.add_argument("in-bams", nargs="+",
-          help="A space separateed list of BAM files to merge. Assumes same reads were mapped against different indexes. " +
-               "Only keeps read 1 of paired end sequencing, since this is used downstream.")
+            help="A space separated list of BAM files to merge. Assumes same reads were mapped against different indexes. " +
+                 "Only keeps read 1 of paired end sequencing, since this is used downstream.")
         parser.add_argument("out-bam", help="Path to merged BAM.")
 
         if len(sys.argv[2:]) < 2:
@@ -168,16 +168,25 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
     def estimate(self):
         parser = argparse.ArgumentParser(usage=
-'''usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] [--plot OUTFOLDER] [--grouped-coverage-maps GROUPED_COVERAGE_MAPS] coverage-map-folder out-file
-'''
+        """usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] [--plot OUTFOLDER] [--batch-size INT] [--restart] coverage-map-folder out-file
+        """
         )
         parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
         parser.add_argument("out_file", help="Filename to store PTR table.")
-        parser.add_argument("--min-reads", type=float, help="Minimum number of reads required to compute a PTR (default 5000).", default=5000)
-        parser.add_argument("--min-cov", type=float, help="Fraction of nonzero bins required to compute a PTR (default 0.75).", default=0.75)
-        parser.add_argument("--min-samples", type=float, help="CoPTRContig only. Minimum number of samples required to reorder bins (default 5).", default=5)
+        parser.add_argument("--min-reads", type=float,
+            help="Minimum number of reads required to compute a PTR (default 5000).", default=5000
+        )
+        parser.add_argument("--min-cov", type=float,
+            help="Fraction of nonzero bins required to compute a PTR (default 0.75).", default=0.75
+        )
+        parser.add_argument("--min-samples", type=float,
+            help="CoPTRContig only. Minimum number of samples required to reorder bins (default 5).", default=5
+        )
         parser.add_argument("--threads", type=int, help="Number of threads to use (default 1).", default=1)
         parser.add_argument("--plot", default=None, help="Plot model fit and save the results.")
+        parser.add_argument("--restart", default=False, action="store_true",
+            help="Restarts the estimation step using the genomes in the coverage-maps-genome folder."
+        )
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -185,56 +194,81 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
 
         args = parser.parse_args(sys.argv[2:])
         sample_ids = set()
-        # reference genome id -> list of coverage maps
-        coverage_maps_ref = {}
-        coverage_maps_contig = {}
         ref_genome_ids = set()
         assembly_genome_ids = set()
 
 
         grouped_coverage_map_folder = os.path.join(args.coverage_map_folder, "coverage-maps-genome")
-        if not os.path.exists(grouped_coverage_map_folder):
+        if not args.restart and not os.path.isdir(grouped_coverage_map_folder):
             os.mkdir(grouped_coverage_map_folder)
 
-        print_info("CoPTR", "grouping reads by reference genome")
-        print_info("CoPTR", "saving to " + grouped_coverage_map_folder)
+        if args.restart:
+            print_info("CoPTR", "restarting from files in " + grouped_coverage_map_folder)
+            for cm_file in sorted(os.listdir(grouped_coverage_map_folder)):
+                _, ext = os.path.splitext(cm_file)
+                if ext != ".pkl": continue
 
-        # first construct a list of genome_ids for ptr estimates
-        for f in sorted(os.listdir(args.coverage_map_folder)):
-            fname, ext = os.path.splitext(f)
-            if ext != ".pkl": continue
-            fpath = os.path.join(args.coverage_map_folder, f)
+                print_info("CoPTR", "checking " + cm_file)
+                with open(os.path.join(grouped_coverage_map_folder, cm_file), "rb") as f:
+                    try:
+                        while True:
+                            cm = pkl.load(f)
+                            if cm.is_assembly:
+                                assembly_genome_ids.add(cm.genome_id)
+                            else:
+                                ref_genome_ids.add(cm.genome_id)
+                            sample_ids.add(cm.sample_id)
 
-            with open(fpath, "rb") as file:
-                coverage_maps = pkl.load(file)
+                    except EOFError:
+                        pass
 
-                for ref_id in coverage_maps:
+        else:
+            print_info("CoPTR", "grouping reads by reference genome")
+            print_info("CoPTR", "saving to " + grouped_coverage_map_folder)
 
-                    # don't load coverage maps of species in reference database without reads
-                    if coverage_maps[ref_id].count_reads() < args.min_reads:
-                        continue
+            # first construct a list of genome_ids for ptr estimates
+            for f in sorted(os.listdir(args.coverage_map_folder)):
+                fname, ext = os.path.splitext(f)
+                if ext != ".pkl": continue
+                fpath = os.path.join(args.coverage_map_folder, f)
 
-                    write_mode = "ab+" if ref_id in ref_genome_ids or ref_id in assembly_genome_ids else "wb+"
+                print_info("CoPTR", "\tprocessing {}".format(f))
 
-                    # append to genome file
-                    with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), write_mode) as tofile:
-                        pkl.dump(coverage_maps[ref_id], tofile)
+                with open(fpath, "rb") as file:
+                    coverage_maps = pkl.load(file)
 
-                    if coverage_maps[ref_id].is_assembly:
-                        assembly_genome_ids.add(ref_id)
-                    else:
-                        ref_genome_ids.add(ref_id)
+                    for ref_id in coverage_maps:
 
-                    sample_ids.add(coverage_maps[ref_id].sample_id)
+                        # don't load coverage maps of species in reference database without reads
+                        if coverage_maps[ref_id].count_reads() < args.min_reads:
+                            continue
 
-                del coverage_maps
+                        write_mode = "ab+" if ref_id in ref_genome_ids or ref_id in assembly_genome_ids else "wb"
 
+                        # append to genome file
+                        with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), write_mode) as tofile:
+                            pkl.dump(coverage_maps[ref_id], tofile)
 
-        print_info("CoPTR", "done grouping by reference genome")
+                        if coverage_maps[ref_id].is_assembly:
+                            assembly_genome_ids.add(ref_id)
+                        else:
+                            ref_genome_ids.add(ref_id)
+
+                        sample_ids.add(coverage_maps[ref_id].sample_id)
+
+                    del coverage_maps
+            print_info("CoPTR", "done grouping by reference genome")
+            print_info("CoPTR", "the --restart flag can be used to start from here")
 
         sample_ids = sorted(list(sample_ids))
-        results_ref = estimate_ptrs_coptr_ref(ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov, threads=args.threads, plot_folder=args.plot)
-        results_contig = estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_samples, threads=args.threads, plot_folder=args.plot)
+        results_ref = estimate_ptrs_coptr_ref(
+           ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov, 
+           threads=args.threads, plot_folder=args.plot
+        )
+        results_contig = estimate_ptrs_coptr_contig(
+            assembly_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_samples, 
+            threads=args.threads, plot_folder=args.plot
+        )
 
         out_file = args.out_file
         _, ext = os.path.splitext(out_file)
@@ -275,6 +309,14 @@ each fastq must be one of [.fastq, .fq, .fastq.gz, fq.gz]
                     if not np.isnan(result.estimate):
                         row[sample_ids.index(result.sample_id)] = str(result.estimate)
                 f.write(",".join(row) + "\n")
+
+        print_info("CoPTR", "done!")
+        print_info("CoPTR", "you may remove the folder {}".format(grouped_coverage_map_folder))
+        # print_info("CoPTR", "cleaning up {}".format(grouped_coverage_map_folder))
+        # for ref_id in ref_genome_ids.union(assembly_genome_ids):
+        #     filename = os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl")
+        #     os.remove(filename)
+        # os.rmdir(grouped_coverage_map_folder)
 
 
 if __name__ == "__main__":
