@@ -4,7 +4,7 @@ bam_processor.py
 Extract coordinates along each reference sequence and group reference 
 sequences by genome.
 """
-
+import array
 import bisect
 import math
 import numpy as np
@@ -284,6 +284,61 @@ class BamProcessor:
         return ref_seq_lengths
 
 
+    def compute_bin_coverage(self, genome_ids, read_container, lengths, ref_seq_genome_id):
+        """Compute fraction of bins with reads for each reference genome.
+
+        Parameters
+        ----------
+            genome_ids : set[str]
+                A set of genome ids in the sample
+            read_container : ReadContainer
+                Reads in the sample
+            lengths : dict[str -> int]
+                Length of each reference sequence
+
+        Returns
+        -------
+            coverage_frac : dict[str -> float]
+                Fraction of nonzero read count bins for each genome_id.
+        """
+        binned_counts = {}
+        for seq_id in ref_seq_genome_id:
+            # compute 5000kb bins
+            nbins = int(math.ceil(lengths[seq_id] / 5000))
+            binned_counts[seq_id] = np.zeros(nbins)
+
+        for read_id in sorted(read_container.reads):
+            ref_names, ref_positions = read_container.get_mappings(read_id)
+
+            if len(ref_names) > 1: continue
+            bin_idx = math.floor(ref_positions[0] / 5000)
+            binned_counts[ref_names[0]][bin_idx] += 1
+
+        covered_bins = {}
+        total_bins = {}
+        for ref_seq in binned_counts:
+            genome_id = ref_seq_genome_id[ref_seq]
+
+            covered_bins[genome_id] = covered_bins.get(genome_id, 0) + (binned_counts[ref_seq] != 0).sum()
+            total_bins[genome_id] = total_bins.get(genome_id, 0) + binned_counts[ref_seq].size
+
+        # now add contigs without reads
+        for ref_seq in ref_seq_genome_id:
+            genome_id = ref_seq_genome_id[ref_seq]
+            if genome_id in total_bins and ref_seq not in binned_counts:
+                nbins = int(math.ceil(lengths[seq_id] / 5000))
+                total_bins[genome_id] += nbins
+
+        coverage_frac = {}
+        for genome_id in genome_ids:
+            if genome_id in covered_bins:
+                coverage_frac[genome_id] = covered_bins[genome_id] / total_bins[genome_id]
+            else:
+                coverage_frac[genome_id] = 0
+        return coverage_frac
+
+
+
     def assign_multimapped_reads(self, read_container, lengths, max_alignments):
         """Assign multiple mapped reads to a single genome.
 
@@ -314,6 +369,7 @@ class BamProcessor:
             ref_seq_genome_id[ref_name] = genome_id
             genome_ids.add(genome_id)
 
+        genome_coverage = self.compute_bin_coverage(genome_ids, read_container, lengths, ref_seq_genome_id)
 
         print_info("BamProcessor", "collecting multi-mapped reads")
         genome_ids = sorted(list(genome_ids))
@@ -343,11 +399,12 @@ class BamProcessor:
                 continue
 
             # if the read maps to only one genome, use it to
-            # set the prior for the read assignment model
-            if len(ref_genomes) == 1:
+            # set the prior for the read assignment model,
+            # but only if the coverage is sufficient
+            if len(ref_genomes) == 1 and genome_coverage[genome_id] > 0.3:
                 prior_counts[bisect.bisect_left(genome_ids, genome_id)] += 1
             # otherwise, store the mappings with indicators
-            else:
+            elif len(ref_genomes) > 1:
                 for genome_id in ref_genomes:
                     idx = bisect.bisect_left(genome_ids, genome_id)
                     indices.append(idx)
@@ -574,6 +631,8 @@ class CoverageMap:
             contig.
     """
 
+    __slots__ = ("bam_file", "genome_id", "sample_id", "is_assembly")
+
     def __init__(self, bam_file, genome_id, is_assembly):
         self.bam_file = bam_file
         self.genome_id = genome_id
@@ -595,10 +654,36 @@ class CoverageMapRef(CoverageMap):
             A list of coordinates, one per read.
     """
 
+    __slots__ = ("bam_file", "genome_id", "sample_id", "is_assembly", "read_positions", "length")
+
+
+    def __getstate__(self):
+        return self.bam_file, self.genome_id, self.sample_id, self.is_assembly, \
+               self.read_positions, self.length
+
+
+    def __setstate__(self, state):
+        if type(state) == list or type(state) == tuple:
+            self.bam_file, self.genome_id, self.sample_id, self.is_assembly, \
+            self.read_positions, self.length = state
+        else:
+            for key in state:
+                setattr(self, key, state[key])
+
+
     def __init__(self, bam_file, genome_id, read_positions, length):
         super().__init__(bam_file, genome_id, is_assembly=False)
-        self.read_positions = read_positions
+        self.read_positions = np.array(read_positions)
         self.length = length
+
+
+    def __str__(self):
+        return "CoverageMapRef(bam_file={}, genome_id={})".format(
+            self.bam_file, self.genome_id
+        )
+
+    def __repr__(self):
+        return self.__str__()
 
 
     def get_length(self):
@@ -654,15 +739,43 @@ class CoverageMapContig(CoverageMap):
             and value is the length of that contig.
     """
 
+    __slots__ = ("bam_file", "genome_id", "sample_id", "is_assembly",
+                 "contig_ids", "contig_read_positions", "contig_lengths", "bin_size",
+                 "binned_reads", "total_bins", "frac_nonzero", "reads", "passed_qc_flag")
+
+
+    def __getstate__(self):
+        return self.bam_file, self.genome_id, self.sample_id, self.is_assembly, \
+               self.contig_ids, self.contig_read_positions, self.contig_lengths, self.bin_size, \
+               self.binned_reads, self.total_bins, self.frac_nonzero, self.reads, self.passed_qc_flag
+
+
+    def __setstate__(self, state):
+        if type(state) == list or type(state) == tuple:
+            self.bam_file, self.genome_id, self.sample_id, self.is_assembly, \
+            self.contig_ids, self.contig_read_positions, self.contig_lengths, self.bin_size, \
+            self.binned_reads, self.total_bins, self.frac_nonzero, self.reads, self.passed_qc_flag = state
+        else:
+            for key in state:
+                setattr(self, key, state[key])
+
+        # load old pickle files
+        for contig in self.contig_read_positions:
+            self.contig_read_positions[contig] = array.array("I", self.contig_read_positions[contig])
+
+
     def __init__(self, bam_file, genome_id, contig_read_positions, contig_lengths):
         super().__init__(bam_file, genome_id, is_assembly=True)
         self.contig_ids = np.sort(list(contig_lengths.keys()))
-        self.contig_read_positions = contig_read_positions
         self.contig_lengths = contig_lengths
+
+        self.contig_read_positions = {}
+        for contig in contig_read_positions:
+            self.contig_read_positions[contig] = array.array("I", contig_read_positions[contig])
 
         self.bin_size = None
         self.binned_reads = {}
-        # total number of 10Kb bins
+        # total number of bins
         self.total_bins = None
         # fraction with nonzero read count
         self.frac_nonzero = None
@@ -677,8 +790,18 @@ class CoverageMapContig(CoverageMap):
             self.bam_file, self.genome_id, len(self.contig_ids), self.reads, self.frac_nonzero, self.passed_qc_flag
         )
 
+
     def __repr__(self):
         return self.__str__()
+
+
+    def reset(self):
+        self.bin_size = None
+        self.binned_reads = {}
+        self.total_bins = None
+        self.frac_nonzero = None
+        self.reads = None
+        self.passed_qc_flag = None
 
 
     def compute_bin_size(self):
@@ -745,7 +868,7 @@ class CoverageMapContig(CoverageMap):
 
 
     def bin_reads(self, contig_id):
-        """Count reads in 10Kb windows.
+        """Count reads in bins.
 
         Parameters
         ----------
