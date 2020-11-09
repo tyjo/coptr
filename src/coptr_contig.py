@@ -8,7 +8,6 @@ import multiprocessing as mp
 import numpy as np
 import os.path
 import pickle as pkl
-import psutil
 import scipy.special
 import scipy.stats
 import sys
