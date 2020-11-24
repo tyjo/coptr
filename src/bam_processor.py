@@ -608,6 +608,9 @@ class BamProcessor:
                     out_aln.query_qualities = in_aln.query_qualities
                     out_aln.tags = in_aln.tags
 
+                    # check that reference sequence is set correctly
+                    assert seq_names[out_aln.reference_id] == in_aln.reference_name, "missing reference sequence from {}".format(bam_file)
+
                     out.write(out_aln)
             inf.close()
         out.close()

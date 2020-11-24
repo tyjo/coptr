@@ -8,6 +8,7 @@ import sys
 from src.bam_processor import BamProcessor, CoverageMapRef, CoverageMapContig
 from src.coptr_contig import estimate_ptrs_coptr_contig
 from src.coptr_ref import estimate_ptrs_coptr_ref
+from src.compute_read_counts import compute_read_counts
 from src.print import print_error, print_info
 from src.read_mapper import ReadMapper
 from src.util import get_fastq_name
@@ -25,6 +26,7 @@ command: index            create a bowtie2 index for a reference database
          merge            merge BAM files from reads mapped to multiple indexes
          extract          compute coverage maps from bam files
          estimate         estimate PTRs from coverage maps
+         count            compute read counts for each genome after filtering
 """
         )
         self.default_bt2_k = 10
@@ -239,6 +241,8 @@ command: index            create a bowtie2 index for a reference database
 
                     for ref_id in coverage_maps:
 
+                        sample_ids.add(coverage_maps[ref_id].sample_id)
+
                         # don't load coverage maps of species in reference database without reads
                         if coverage_maps[ref_id].count_reads() < args.min_reads:
                             continue
@@ -254,16 +258,14 @@ command: index            create a bowtie2 index for a reference database
                         else:
                             ref_genome_ids.add(ref_id)
 
-                        sample_ids.add(coverage_maps[ref_id].sample_id)
-
                     del coverage_maps
             print_info("CoPTR", "done grouping by reference genome")
             print_info("CoPTR", "the --restart flag can be used to start from here")
 
         sample_ids = sorted(list(sample_ids))
         results_ref = estimate_ptrs_coptr_ref(
-           ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov, 
-           threads=args.threads, plot_folder=args.plot
+            ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov, 
+            threads=args.threads, plot_folder=args.plot
         )
         results_contig = estimate_ptrs_coptr_contig(
             assembly_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_samples, 
@@ -317,6 +319,51 @@ command: index            create a bowtie2 index for a reference database
         #     filename = os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl")
         #     os.remove(filename)
         # os.rmdir(grouped_coverage_map_folder)
+
+
+    def count(self):
+        parser = argparse.ArgumentParser(usage=
+        """usage: coptr.py count [-h] coverage-map-folder out-file
+        """
+        )
+        parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
+        parser.add_argument("out_file", help="Filename to store PTR table.")
+
+        if len(sys.argv[2:]) < 1:
+            parser.print_help()
+            exit(1)
+
+        args = parser.parse_args(sys.argv[2:])
+
+        print_info("CoPTR", "estimating relative abundances")
+
+        counts, genome_ids = compute_read_counts(args.coverage_map_folder)
+
+        out_file = args.out_file
+        _, ext = os.path.splitext(out_file)
+        if ext != ".csv":
+            out_file += ".csv"
+
+        print_info("CoPTR", "writing {}".format(out_file))
+
+        with open(out_file, "w") as f:
+            # write the header
+            f.write("count:genome_id/sample_id")
+            for sample_id in counts:
+                f.write(",{}".format(sample_id))
+            f.write("\n")
+
+            for genome_id in sorted(genome_ids):
+                row = [genome_id]
+                for sample_id in counts:
+                    if genome_id in counts[sample_id]:
+                        row.append(str(counts[sample_id][genome_id]))
+                    else:
+                        row.append(str(0))
+                row = ",".join(row) + "\n"
+                f.write(row)
+
+        print_info("CoPTR", "done!")
 
 
 if __name__ == "__main__":
