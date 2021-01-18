@@ -2,15 +2,20 @@
 Quick Start
 ===========
 
-For instructions on installation and environment set up, please see :doc:`Installation <installation>`. 
+Environment set up and installation: :doc:`Installation <installation>`.
+
+Detailed instructions: :doc:`Tutorial <tutorial>`.
 
 | Example data:
-| ``https://drive.google.com/file/d/1vGAfTDRDKN1wPULRd4EibxzbYFbJofYZ/view?usp=sharing``
+| ``https://dl.dropboxusercontent.com/s/wrsxjimr6l96lcq/example-data.tar.gz``
 
     .. code-block::
 
       git clone https://github.com/tyjo/coptr
       cd coptr
+
+      wget https://dl.dropboxusercontent.com/s/wrsxjimr6l96lcq/example-data.tar.gz
+      tar -xzvf example-data.tar.gz
 
       # Set up the environment:
       conda env create -f coptr-env.yml
@@ -26,9 +31,13 @@ For instructions on installation and environment set up, please see :doc:`Instal
       python coptr.py extract example-data/bam example-data/coverage-maps
       
       # Estimate ptrs:
-      python coptr.py estimate example-data/coverage-maps out --min-reads 2500
+      # Note the min-reads flag is optional. We recommend the default setting (5000 reads).
+      python coptr.py estimate example-data/coverage-maps out.csv --min-reads 2500
 
       # View the output:
-      cat out
+      cat out.csv
 
-See the :doc:`Tutorial <tutorial>` for more details.
+      log2(PTR):genome_id/sample_id,ERR969281,ERR969282,ERR969283,ERR969285,ERR969286,ERR969428,ERR969429,ERR969430
+      l-gasseri-ref,,,,,,1.1840987863325785,1.1945539660363145,1.2879271469720541
+      e-coli-mag,1.2078623467253466,1.0375575947553943,0.9433005522894075,0.759132363901812,0.7846476652840171,,,
+

@@ -16,5 +16,8 @@ Modules
 .. automodule:: src.read_mapper
    :members:
 
+.. automodule:: src.read_assigner
+   :members:
+
 .. automodule:: src.util
    :members:

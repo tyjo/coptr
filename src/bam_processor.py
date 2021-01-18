@@ -466,13 +466,16 @@ class BamProcessor:
 
 
 
-    def process_bam(self, bam_file, max_alignments):
+    def process_bam(self, bam_file, max_alignments=10):
         """Extract read coordinates along each reference sequence.
 
         Parameters
         ----------
             bam_file : str
                 Path to a bam file.
+            max_alignments : int
+                Bounds the number alignments to consider for multi-mapped reads.
+                Reads greater than or equal to this threshold are discarded.
 
         Returns
         -------
@@ -639,7 +642,7 @@ class CoverageMap:
     def __init__(self, bam_file, genome_id, is_assembly):
         self.bam_file = bam_file
         self.genome_id = genome_id
-        self.sample_id = os.path.basename(bam_file).split(".")[0]
+        self.sample_id, _ = os.path.splitext(os.path.basename(bam_file))
         self.is_assembly = is_assembly
 
 
@@ -681,8 +684,8 @@ class CoverageMapRef(CoverageMap):
 
 
     def __str__(self):
-        return "CoverageMapRef(bam_file={}, genome_id={})".format(
-            self.bam_file, self.genome_id
+        return "CoverageMapRef(bam_file={}, genome_id={}, sample_id={}, reads={})".format(
+            self.bam_file, self.genome_id, self.sample_id, len(self.read_positions)
         )
 
     def __repr__(self):
@@ -944,7 +947,7 @@ class CoverageMapContig(CoverageMap):
         else:
             self.passed_qc_flag = True
 
-        self.frac_nonzero = zero_bins / total_bins if total_bins > 0 else 0
+        self.frac_nonzero = (total_bins - zero_bins) / total_bins if total_bins > 0 else 0
         self.reads  = total_reads
         self.total_bins = total_bins
         return self.passed_qc_flag

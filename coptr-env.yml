@@ -6,6 +6,8 @@ channels:
   - defaults
 dependencies:
   - bowtie2=2.4.1
+  - matplotlib=3.3.2
+  - matplotlib-base=3.3.2
   - numpy=1.19.1
   - pysam=0.16.0.1
   - python=3.7.8
@@ -19,4 +21,3 @@ dependencies:
   - sphinxcontrib-jsmath=1.0.1
   - sphinxcontrib-qthelp=1.0.3
   - sphinxcontrib-serializinghtml=1.1.4
-prefix: /Users/tylerjoseph/anaconda3/envs/coptr

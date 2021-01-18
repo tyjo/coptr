@@ -48,7 +48,7 @@ class CoPTRContigEstimate:
         self.cov_frac = cov_frac
 
     def __str__(self):
-        return "CoPTRContigEstimate(bam_file={}, genome_id={}, sample_id={}, estimate={:.3f}, nreads={}, cov_frac={}".format(
+        return "CoPTRContigEstimate(bam_file={}, genome_id={}, sample_id={}, estimate={:.3f}, nreads={}, cov_frac={})".format(
             self.bam_file, self.genome_id, self.sample_id, self.estimate, self.nreads, self.cov_frac
             )
 
@@ -325,6 +325,7 @@ class CoPTRContig:
         tmp = []
         np.set_printoptions(suppress=True)
         for i,col in enumerate(A.T):
+
             lower_bound, upper_bound = self.compute_genomewide_bounds(col, crit_region=0.05)
             col[np.logical_or(col > upper_bound, col < lower_bound)] = np.nan
 
@@ -340,13 +341,13 @@ class CoPTRContig:
                 bam_file = passing_coverage_maps[i].bam_file
                 genome_id = passing_coverage_maps[i].genome_id
                 sample_id = passing_coverage_maps[i].sample_id
-                reads = passing_coverage_maps[i].reads
                 frac_nonzero = passing_coverage_maps[i].frac_nonzero
                 m = np.nan
                 estimate = CoPTRContigEstimate(bam_file, genome_id, sample_id, np.nan, reads, frac_nonzero)
                 estimates.append(estimate)
                 parameters.append((np.nan, np.nan))
                 binned_counts.append([np.nan])
+
 
         if len(A_filtered) < self.min_samples:
             for cm in tmp:
@@ -368,7 +369,7 @@ class CoPTRContig:
         A = np.array(A_filtered).T
 
         # filter out rows where too many bins are missing
-        keep_rows = np.sum(np.isnan(A), axis=1) < 0.05*A.shape[1]
+        keep_rows = np.sum(np.isnan(A), axis=1) < 0.025*A.shape[1]
         A = A[keep_rows,:]
 
         if keep_rows.sum() < 0.5*keep_rows.size:
@@ -495,9 +496,9 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
         ax[1].scatter(x2, emp_probs, c="C1")
         ax[1].plot(x2, y, c="black", linewidth=3)
         ax[1].set_yscale("log", base=2)
-        ax[1].set_ylabel("Log2 Probability")
+        ax[1].set_ylabel("Density")
         ax[1].set_xlabel("Reordered Bins")
-        ax[1].set_title("\nslope={:.3f} (Reads = {})".format(m, int(estimate.nreads)))
+        ax[1].set_title("\nlog2(PTR)={:.3f} (Reads = {})".format(m, int(estimate.nreads)))
 
         plt.tight_layout()
         plt.savefig(os.path.join(plot_folder, estimate.sample_id + "-" + estimate.genome_id + ".pdf"))

@@ -13,12 +13,13 @@ from src.print import print_error, print_info
 from src.read_mapper import ReadMapper
 from src.util import get_fastq_name
 
+VERSION="1.0.0"
 
 class ProgramOptions:
 
     def __init__(self):
         parser = argparse.ArgumentParser(
-            description="Compute PTRs from complete reference genomes and assemblies.",
+            description="CoPTR (v{}): Compute PTRs from complete reference genomes and assemblies.".format(VERSION),
             usage="""coptr.py <command> [options]
 
 command: index            create a bowtie2 index for a reference database
@@ -84,7 +85,7 @@ command: index            create a bowtie2 index for a reference database
             help="Number of threads for bowtie2 mapping."
         )
         parser.add_argument("--bt2-k", type=int, default=self.default_bt2_k,
-            help="Number of alignments to report. Passed to -k flag of bowtie2.",
+            help="(Default 10). Number of alignments to report. Passed to -k flag of bowtie2.",
 
         )
 
@@ -240,7 +241,6 @@ command: index            create a bowtie2 index for a reference database
                     coverage_maps = pkl.load(file)
 
                     for ref_id in coverage_maps:
-
                         sample_ids.add(coverage_maps[ref_id].sample_id)
 
                         # don't load coverage maps of species in reference database without reads

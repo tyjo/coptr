@@ -6,7 +6,6 @@ class PoissonPCA:
     """Principal Component Analysis with Poisson observations.
     """
 
-
     def pca(self, X, k, tol=1E-3, verbose=False):
         """Run the PCA. For a data matrix X (sample by observations), finds two matrices W and V
         such that:
@@ -29,19 +28,21 @@ class PoissonPCA:
 
         # use PCA to initialize matrices W,V
         # initializing missing values to mean
-        # Xt = np.copy(X)
-        # Xt[Xt == 0] = 0.1
-        # for i,row in enumerate(Xt):
-        #     if np.isnan(row).sum() > 0:
-        #         Xt[i,np.isnan(row)] = np.mean(row[np.isfinite(row)])
-        # u,s,vh = np.linalg.svd(np.log2(Xt))
-        # u = u[:,:k]
-        # s = s[:k]
-        # vh = vh[:k,:]
-        # W = u*s
-        # V = vh
-        W = np.random.normal(loc=0, scale=0.1, size=(X.shape[0], k))
-        V = np.random.normal(loc=0, scale=0.1, size=(k, X.shape[1]))
+        Xt = np.copy(X)
+        Xt[Xt == 0] = 0.1
+        for i,row in enumerate(Xt):
+            if np.isnan(row).sum() > 0:
+                Xt[i,np.isnan(row)] = np.mean(row[np.isfinite(row)])
+        u,s,vh = np.linalg.svd(np.log2(Xt))
+        u = u[:,:k]
+        s = s[:k]
+        vh = vh[:k,:]
+        W = u*s
+        V = vh
+        # W = np.random.normal(loc=0, scale=0.1, size=(X.shape[0], k))
+        # V = np.random.normal(loc=0, scale=0.1, size=(k, X.shape[1]))
+        # W = np.zeros((X.shape[0], k))
+        # V = np.zeros((k, X.shape[1]))
 
         it = 0
         prv_log_lk = -np.inf

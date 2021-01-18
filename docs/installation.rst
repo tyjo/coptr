@@ -28,16 +28,18 @@ To check if you can run coPTR:
 
     .. code-block::
 
-      $ python coptr.py -h
+      $ python coptr.py
 
       usage: coptr.py <command> [options]
 
       command: index            create a bowtie2 index for a reference database
                map              map reads against a reference database
+               merge            merge BAM files from reads mapped to multiple indexes
                extract          compute coverage maps from bam files
                estimate         estimate PTRs from coverage maps
+               count            compute read counts for each genome after filtering
 
-      Compute PTRs from complete reference genomes and assemblies.
+      CoPTR (v1.0.0): Compute PTRs from complete reference genomes and assemblies.
 
       positional arguments:
         command     Command to run.
@@ -49,10 +51,11 @@ To check if you can run coPTR:
 Dependencies
 ------------
 Installation using conda will install all required dependencies. However,
-coPTR's dependencies are listed below if you wish to install them manually.
+CoPTR's dependencies are listed below if you wish to install them manually.
 
-* bowtie2 (>=2.4.1): coPTR assumes bowtie2 is install and accessible from your PATH variable
+* bowtie2 (>=2.4.1): CoPTR assumes bowtie2 is install and accessible from your PATH variable
 * python  (>=3.7.8)
+* matplotlib (>=3.3.2)
 * numpy (=1.19.1)
 * scipy (=1.5.2)
 * pysam (=0.16.0.1)

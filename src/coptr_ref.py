@@ -830,7 +830,6 @@ def plot_fit(coptr_ref_est, read_positions, genome_length, min_reads, min_cov, p
 
     ax[0].set_ylabel("Read Count")
     ax[0].set_xlabel("Position Along Genome")
-    ax[0].set_title("Binned Read Counts (Unfiltered)")
 
     # now plot filtered bins and model fit
     filtered_reads, filtered_length, qc_result = rf.filter_reads(rp, genome_length)
