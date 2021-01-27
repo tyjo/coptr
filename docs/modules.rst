@@ -10,6 +10,9 @@ Modules
 .. automodule:: src.coptr_ref
    :members:
 
+.. automodule:: src.poisson_pca
+   :members:
+
 .. automodule:: src.print
    :members:
 
