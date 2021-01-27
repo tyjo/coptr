@@ -196,13 +196,11 @@ Computing coverage maps
 .. code-block:: text
 
     $ python coptr.py extract example-data/bam example-data/coverage-maps
-    [INFO] (Aug 31, 2020 12:13:53) BamProcessor: processing example-data/bam/ERR969428.bam
     [INFO] (Jan 18, 2021 10:31:43) BamProcessor: processing example-data/bam/ERR969281.bam
     [INFO] (Jan 18, 2021 10:31:43) BamProcessor: determining reference genomes
     [INFO] (Jan 18, 2021 10:31:43) BamProcessor: collecting multi-mapped reads
     [INFO] (Jan 18, 2021 10:31:43) BamProcessor: grouping reads by reference genome
     ...
-    [INFO] (Aug 31, 2020 12:13:56) BamProcessor: processing example-data/bam/ERR969285.bam
     [INFO] (Aug 31, 2020 12:13:56) BamProcessor: found 190 reference sequences corresponding to 2 genomes
 
 Once reads have been mapped, the next step is to compute the coverage along
