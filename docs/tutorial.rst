@@ -274,7 +274,8 @@ Estimating PTRs
     [INFO] (Jan 18, 2021 10:36:16) CoPTR: you may remove the folder example-data/coverage-maps/coverage-maps-genome
 
 The final stage is to estimate PTR ratios from coverage maps. This is accomplished
-with the ``estimate`` command.
+with the ``estimate`` command. **It is strongly recommended that you perform this step
+on all samples at once.**
 
 .. code-block:: text
 
