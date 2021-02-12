@@ -4,9 +4,9 @@ import unittest
 import numpy as np
 import scipy.stats
 
-from src.coptr.bam_processor import CoverageMapContig
-from src.coptr.coptr_contig import CoPTRContig
-from src.coptr.coptr_ref import CoPTRRef
+from coptr.bam_processor import CoverageMapContig
+from coptr.coptr_contig import CoPTRContig
+from coptr.coptr_ref import CoPTRRef
 
 
 class TestCoPTR(unittest.TestCase):

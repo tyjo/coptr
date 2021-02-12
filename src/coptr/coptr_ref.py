@@ -67,6 +67,27 @@ class QCResult:
         return self.__str__()
 
 
+class CoordinateMap:
+    """Map post-filtering genomic coordinates to pre-filtering
+    genomic coordinates.
+    """
+
+    def __init__(self):
+        self.break_points = []
+
+    def update_break_points(self, break_point, shift_size):
+        self.break_points.append((break_point, shift_size))
+
+    def translate(self, filtered_coord):
+        unfiltered_coord = filtered_coord
+        for break_point, shift_size in self.break_points:
+            if unfiltered_coord >= break_point:
+                unfiltered_coord += shift_size
+        return unfiltered_coord
+
+
+
+
 class ReadFilterRef:
     """Read filtering steps for CoPTR Ref.
 
@@ -111,10 +132,11 @@ class ReadFilterRef:
                 QCResult(-1, len(read_positions), -1, False),
             )
 
+        coord_map = CoordinateMap()
         bin_size = self.compute_bin_size(genome_length)
         read_positions = np.copy(read_positions)
         filtered_read_positions, filtered_genome_length = self.filter_reads_phase1(
-            read_positions, genome_length, bin_size
+            read_positions, genome_length, bin_size, coord_map
         )
         # more than 25% of the genome is removed
         frac_removed = 1 - filtered_genome_length / genome_length
@@ -126,17 +148,16 @@ class ReadFilterRef:
             )
 
         filtered_read_positions, filtered_genome_length = self.filter_reads_phase2(
-            filtered_read_positions, filtered_genome_length, bin_size
+            filtered_read_positions, filtered_genome_length, bin_size, coord_map
         )
         qc_result = self.quality_check(
             filtered_read_positions,
             filtered_genome_length,
-            genome_length,
-            bin_size,
+            genome_length, bin_size,
             self.min_reads,
-            self.min_cov,
+            self.min_cov
         )
-        return filtered_read_positions, filtered_genome_length, qc_result
+        return filtered_read_positions, filtered_genome_length, qc_result, coord_map
 
     def compute_bin_size(self, genome_length):
         """Compute bin size for read counts.
@@ -303,7 +324,8 @@ class ReadFilterRef:
 
         return rolling_counts, endpoints
 
-    def remove_reads_by_region(self, read_positions, genome_length, regions):
+
+    def remove_reads_by_region(self, read_positions, genome_length, regions, coord_map):
         """Remove reads that overlap a region in regions.
 
         Parameters
@@ -340,9 +362,12 @@ class ReadFilterRef:
             read_positions = read_positions[keep]
             read_positions[read_positions > (right - adjustment)] -= remove_size
 
+            coord_map.update_break_points(right - remove_size, remove_size)
+
         return read_positions, new_genome_length
 
-    def filter_reads_phase1(self, read_positions, genome_length, bin_size):
+
+    def filter_reads_phase1(self, read_positions, genome_length, bin_size, coord_map):
         """A coarse-grained genomewide filter that removes reads in
         ultra-high or ultra-low coverage regions.
 
@@ -393,10 +418,15 @@ class ReadFilterRef:
             read_positions, genome_length, remove_regions
         )
 
+        read_positions, new_genome_length = self.remove_reads_by_region(
+            read_positions, genome_length, remove_regions, coord_map
+        )
+
         binned_reads = self.bin_reads(read_positions, genome_length, bin_size)
         return read_positions, new_genome_length
 
-    def filter_reads_phase2(self, read_positions, genome_length, bin_size):
+
+    def filter_reads_phase2(self, read_positions, genome_length, bin_size, coord_map):
         """A fine-grained filter that removes reads in localized regions
         with too-high or too-low coverage. For each 10Kb, looks 6.25% of
         the genome length ahead and 6.25% of the genome length behind.
@@ -469,7 +499,7 @@ class ReadFilterRef:
             remove_regions.append((remove_start, remove_end))
 
         read_positions, new_genome_length = self.remove_reads_by_region(
-            read_positions, genome_length, remove_regions
+            read_positions, genome_length, remove_regions, coord_map
         )
         return read_positions, new_genome_length
 
@@ -532,6 +562,7 @@ class CoPTRRefEstimate:
         ter_estimate,
         nreads,
         cov_frac,
+        ori_estimate_coord
     ):
         self.bam_file = bam_file
         self.genome_id = genome_id
@@ -541,6 +572,7 @@ class CoPTRRefEstimate:
         self.ter_estimate = ter_estimate
         self.nreads = nreads
         self.cov_frac = cov_frac
+        self.ori_estimate_coord = ori_estimate_coord
 
     def __str__(self):
         return "CoPTRRefEstimate(bam_file={}, genome_id={}, sample_id={}, estimate={:.3f}, nreads={}, cov_frac={})".format(
@@ -688,7 +720,7 @@ class CoPTRRef:
         """
         if filter_reads:
             rf = ReadFilterRef(self.min_reads, self.min_cov)
-            read_positions, ref_genome_len, qc_result = rf.filter_reads(
+            read_positions, ref_genome_len, qc_result, coord_map = rf.filter_reads(
                 read_positions, ref_genome_len
             )
             if not qc_result.passed_qc:
@@ -844,11 +876,15 @@ class CoPTRRef:
         sample_ids = []
         read_positions_list = []
         lengths = []
+        filtered_genomes_lengths = []
+        coord_maps = []
         genome_id = coverage_maps[0].genome_id
         for cm in coverage_maps:
-            read_positions, ref_genome_len, qc_result = rf.filter_reads(
+            read_positions, ref_genome_len, qc_result, coord_map = rf.filter_reads(
                 cm.read_positions, cm.length
             )
+            coord_maps.append(coord_map)
+            filtered_genomes_lengths.append(ref_genome_len)
             if qc_result.passed_qc:
                 read_positions_list.append(np.array(read_positions))
                 lengths.append(ref_genome_len)
@@ -864,6 +900,7 @@ class CoPTRRef:
                     np.nan,
                     qc_result.nreads,
                     qc_result.frac_nonzero,
+                    np.nan
                 )
             )
 
@@ -896,10 +933,12 @@ class CoPTRRef:
                     estimates[i].ori_estimate = ori
                     estimates[i].ter_estimate = ter
                     estimates[i].estimate = np.nan
+                    estimates[i].ori_estimate_coord = coord_maps[i].translate(ori*filtered_genomes_lengths[i])
                 else:
                     estimates[i].ori_estimate = ori
                     estimates[i].ter_estimate = ter
                     estimates[i].estimate = log2_ptrs[n]
+                    estimates[i].ori_estimate_coord = coord_maps[i].translate(ori*filtered_genomes_lengths[i])
                 n += 1
 
         logger.info("Finished %s.", genome_id)
