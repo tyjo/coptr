@@ -26,6 +26,7 @@ class TestCoPTR(unittest.TestCase):
         for i in range(20):
             print("\tsimulation", i+1, "of", 20)
             read_positions, ptr, ori_pos, ter_pos = simulator.simulate_reads(20000, ori_pos=ori_pos)
+            read_positions = read_positions.astype(int)
             sim_log2_ptrs.append(np.log2(ptr))
 
             est_log2_ptr, ori, ter, best_f, qc_result = coptr_ref.estimate_ptr(read_positions, simulator.get_genome_length())

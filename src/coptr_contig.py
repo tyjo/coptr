@@ -141,6 +141,9 @@ class CoPTRContig:
         contig_ids = coverage_maps[0].contig_ids
         ref_genome = coverage_maps[0].genome_id
 
+        bin_coords = []
+        contigs_seen = set()
+
         for cm in coverage_maps:
 
             binned_reads = []
@@ -150,17 +153,28 @@ class CoPTRContig:
                     print_error("CoPTRContig", "missing contig {} from {} in {}".format(contig_id, ref_genome, cm.sample_id), quit=True)
 
                 length = cm.get_length(contig_id)
+                bin_size = cm.compute_bin_size()
                 if length < 11000:
                     continue
                 else:
-                    binned_reads.append(cm.bin_reads(contig_id))
+                    bins = cm.bin_reads(contig_id)
+                    binned_reads.append(bins)
+
+                    if contig_id not in contigs_seen:
+                        pos = 0
+                        for b in bins:
+                            bin_coords.append(contig_id + "-{}".format(int(pos)))
+                            pos += bin_size
+                        contigs_seen.add(contig_id)
 
             row = np.concatenate(binned_reads)
             A.append(row)
 
         # bin by sample
         A = np.array(A).T
-        return A
+        bin_coords = np.array(bin_coords)
+
+        return A, bin_coords
 
 
     def estimate_slope_intercept(self, bin_log_probs):
@@ -329,7 +343,7 @@ class CoPTRContig:
         genome_id = coverage_maps[0].genome_id
 
         # bin by sample
-        A = self.construct_coverage_matrix(passing_coverage_maps)
+        A, bin_coords = self.construct_coverage_matrix(passing_coverage_maps)
         nbins = A.shape[0]
 
 
@@ -389,6 +403,7 @@ class CoPTRContig:
         # filter out rows where too many bins are missing
         keep_rows = np.sum(np.isnan(A), axis=1) < 0.025*A.shape[1]
         A = A[keep_rows,:]
+        bin_coords = bin_coords[keep_rows]
 
         if keep_rows.sum() < 0.5*keep_rows.size:
             for j,col in enumerate(A.T):
@@ -408,7 +423,9 @@ class CoPTRContig:
         W,V = poisson_pca.pca(A,k=1)
         sorted_idx = np.argsort(W.flatten())
         A = A[sorted_idx,:]
+        bin_coords = bin_coords[sorted_idx]
 
+        flipped_bins = False
         for j,col in enumerate(A.T):
             col = col[np.isfinite(col)]
             reads = col.sum()
@@ -431,16 +448,19 @@ class CoPTRContig:
 
             bc = col
             if flip:
+                flipped_bins = True
                 bc = np.flip(bc)
             binned_counts.append(bc)
 
+        if flipped_bins:
+            bin_coords = np.flip(bin_coords)
 
         print_info("CoPTRContig", "finished {}".format(genome_id))
 
         if return_bins:
-            return estimates, parameters, binned_counts
+            return estimates, parameters, binned_counts, bin_coords
         else:
-            return estimates
+            return estimates, bin_coords
 
     def _parallel_helper(self, x):
         ref_genome = x[0]
@@ -448,12 +468,12 @@ class CoPTRContig:
         plot_folder = x[2]
 
         if plot_folder is not None:
-            estimates, parameters, reordered_bins = self.estimate_ptrs(coverage_maps, return_bins=True)
+            estimates, parameters, reordered_bins, bin_coords = self.estimate_ptrs(coverage_maps, return_bins=True)
             plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder)
         else:
-            estimates = self.estimate_ptrs(coverage_maps)
+            estimates, bin_coords = self.estimate_ptrs(coverage_maps)
 
-        return (ref_genome, estimates)
+        return (ref_genome, estimates), bin_coords
 
 
 
@@ -568,18 +588,21 @@ def estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder,
     coptr_contig_estimates = {}
     coptr_contig = CoPTRContig(min_reads, min_samples)
 
+    ref_id_to_bin_coords = {}
+
     if threads == 1:
         for ref_id in sorted(assembly_genome_ids):
             with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
                 coverage_maps = load_coverage_maps(f, ref_id)
 
             if plot_folder is not None:
-                estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(coverage_maps, return_bins=True)
+                estimates, parameters, reordered_bins, bin_coords = coptr_contig.estimate_ptrs(coverage_maps, return_bins=True)
                 plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder)
             else:
-                estimates = coptr_contig.estimate_ptrs(coverage_maps)
+                estimates, bin_coords = coptr_contig.estimate_ptrs(coverage_maps)
 
             coptr_contig_estimates[ref_id] = estimates
+            ref_id_to_bin_coords[ref_id] = bin_coords
 
     else:
         # workers for multiprocessing
@@ -592,9 +615,10 @@ def estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder,
 
             if (i % threads == 0 and i > 0) or i == len(assembly_genome_ids) - 1:
                 flat_coverage_maps = [(ref_id, coverage_maps[ref_id], plot_folder) for ref_id in coverage_maps]
-                flat_results = pool.map(coptr_contig._parallel_helper, flat_coverage_maps)
+                flat_results, bin_coords = pool.map(coptr_contig._parallel_helper, flat_coverage_maps)
                 coptr_contig_estimates.update(dict(flat_results))
 
                 coverage_maps = {}
+                ref_id_to_bin_coords[ref_id] = bin_coords
 
-    return coptr_contig_estimates
+    return coptr_contig_estimates, ref_id_to_bin_coords

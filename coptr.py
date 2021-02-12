@@ -207,6 +207,9 @@ command: index            create a bowtie2 index for a reference database
         parser.add_argument("--restart", default=False, action="store_true",
             help="Restarts the estimation step using the genomes in the coverage-maps-genome folder."
         )
+        parser.add_argument("--oriC", default=False, action="store_true",
+            help="Compute OriC estimates."
+        )
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -284,7 +287,7 @@ command: index            create a bowtie2 index for a reference database
             ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov, 
             threads=args.threads, plot_folder=args.plot
         )
-        results_contig = estimate_ptrs_coptr_contig(
+        results_contig, ref_id_to_bin_coords = estimate_ptrs_coptr_contig(
             assembly_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_samples, 
             threads=args.threads, plot_folder=args.plot
         )
@@ -328,6 +331,20 @@ command: index            create a bowtie2 index for a reference database
                     if not np.isnan(result.estimate):
                         row[sample_ids.index(result.sample_id)] = str(result.estimate)
                 f.write(",".join(row) + "\n")
+
+        if args.oriC:
+            oric_file = os.path.splitext(out_file)[0] + "-oriC.csv"
+            with open(oric_file, "w") as f:
+                f.write("genome_id,oriC\n")
+
+                for genome_id in sorted(results_ref):
+                    orics = [result.ori_estimate_coord for result in results_ref[genome_id] if np.isfinite(result.ori_estimate_coord)]
+                    oric_est = np.mean(orics)
+                    f.write("{},{}\n".format(genome_id, oric_est))
+
+                for genome_id in sorted(ref_id_to_bin_coords):
+                    bin_coords = ref_id_to_bin_coords[genome_id]
+                    f.write("{},{}\n".format(genome_id, "\t".join(bin_coords)))
 
         print_info("CoPTR", "done!")
         print_info("CoPTR", "you may remove the folder {}".format(grouped_coverage_map_folder))
