@@ -239,7 +239,7 @@ extracts a genome id from a sequence id in a fasta file. It is used to group
 contigs together. The default argument ``[^\|]+`` matches all characters up
 to the first ``|``, and uses them as a genome id.
 
-You can check your regular expression using the ``--check-regex-flag``, which
+You can check your regular expression using the ``--check-regex`` flag, which
 skips the extract step and instead outputs a list of all genome ids.
 
 
