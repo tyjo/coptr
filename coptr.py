@@ -26,11 +26,12 @@ from src.bam_processor import BamProcessor, CoverageMapRef, CoverageMapContig
 from src.coptr_contig import estimate_ptrs_coptr_contig
 from src.coptr_ref import estimate_ptrs_coptr_ref
 from src.compute_read_counts import compute_read_counts
+from src.compute_rel_abun import compute_rel_abun
 from src.print import print_error, print_info
 from src.read_mapper import ReadMapper
 from src.util import get_fastq_name
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 class ProgramOptions:
 
@@ -45,6 +46,7 @@ command: index            create a bowtie2 index for a reference database
          extract          compute coverage maps from bam files
          estimate         estimate PTRs from coverage maps
          count            compute read counts for each genome after filtering
+         rabun            estimate relative abundances for each genomes after filtering
 """
         )
         self.default_bt2_k = 10
@@ -188,7 +190,7 @@ command: index            create a bowtie2 index for a reference database
 
     def estimate(self):
         parser = argparse.ArgumentParser(usage=
-        """usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] [--plot OUTFOLDER] [--batch-size INT] [--restart] coverage-map-folder out-file
+        """usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] [--threads THREADS] [--plot OUTFOLDER] [--restart] coverage-map-folder out-file
         """
         )
         parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
@@ -340,11 +342,17 @@ command: index            create a bowtie2 index for a reference database
 
     def count(self):
         parser = argparse.ArgumentParser(usage=
-        """usage: coptr.py count [-h] coverage-map-folder out-file
+        """usage: coptr.py count [-h] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] coverage-map-folder out-file
         """
         )
         parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
         parser.add_argument("out_file", help="Filename to store PTR table.")
+        parser.add_argument("--min-cov", type=float,
+            help="Fraction of nonzero bins required to compute a PTR (default 0.75).", default=0.75
+        )
+        parser.add_argument("--min-samples", type=float,
+            help="CoPTRContig only. Minimum number of samples required to reorder bins (default 5).", default=5
+        )
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
@@ -352,9 +360,9 @@ command: index            create a bowtie2 index for a reference database
 
         args = parser.parse_args(sys.argv[2:])
 
-        print_info("CoPTR", "estimating relative abundances")
+        print_info("CoPTR", "computing read counts")
 
-        counts, genome_ids = compute_read_counts(args.coverage_map_folder)
+        counts, genome_ids = compute_read_counts(args.coverage_map_folder, args.min_cov, args.min_samples)
 
         out_file = args.out_file
         _, ext = os.path.splitext(out_file)
@@ -375,6 +383,60 @@ command: index            create a bowtie2 index for a reference database
                 for sample_id in counts:
                     if genome_id in counts[sample_id]:
                         row.append(str(counts[sample_id][genome_id]))
+                    else:
+                        row.append(str(0))
+                row = ",".join(row) + "\n"
+                f.write(row)
+
+        print_info("CoPTR", "done!")
+
+
+    def rabun(self):
+        parser = argparse.ArgumentParser(usage=
+        """usage: coptr.py rabun [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] coverage-map-folder out-file
+        """
+        )
+        parser.add_argument("coverage_map_folder", help="Folder with coverage maps computed from 'extract'.")
+        parser.add_argument("out_file", help="Filename to store PTR table.")
+        parser.add_argument("--min-reads", type=float,
+            help="Minimum number of reads required to compute a PTR (default 5000).", default=5000
+        )
+        parser.add_argument("--min-cov", type=float,
+            help="Fraction of nonzero bins required to compute a PTR (default 0.75).", default=0.75
+        )
+        parser.add_argument("--min-samples", type=float,
+            help="CoPTRContig only. Minimum number of samples required to reorder bins (default 5).", default=5
+        )
+
+        if len(sys.argv[2:]) < 1:
+            parser.print_help()
+            exit(1)
+
+        args = parser.parse_args(sys.argv[2:])
+
+        print_info("CoPTR", "computing relative abundances")
+
+        rel_abun, genome_ids = compute_rel_abun(args.coverage_map_folder, args.min_reads, args.min_cov, args.min_samples)
+
+        out_file = args.out_file
+        _, ext = os.path.splitext(out_file)
+        if ext != ".csv":
+            out_file += ".csv"
+
+        print_info("CoPTR", "writing {}".format(out_file))
+
+        with open(out_file, "w") as f:
+            # write the header
+            f.write("rel_abun:genome_id/sample_id")
+            for sample_id in rel_abun:
+                f.write(",{}".format(sample_id))
+            f.write("\n")
+
+            for genome_id in sorted(genome_ids):
+                row = [genome_id]
+                for sample_id in rel_abun:
+                    if genome_id in rel_abun[sample_id]:
+                        row.append(str(rel_abun[sample_id][genome_id]))
                     else:
                         row.append(str(0))
                 row = ",".join(row) + "\n"
