@@ -31,7 +31,7 @@ from src.print import print_error, print_info
 from src.read_mapper import ReadMapper
 from src.util import get_fastq_name
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 
 class ProgramOptions:
 

@@ -30,7 +30,7 @@ import scipy.optimize
 import scipy.stats
 import sys
 
-from src.print import print_info, print_warning
+from src.print import print_error, print_info, print_warning
 
 
 class QCResult:
@@ -135,6 +135,14 @@ class ReadFilterRef:
 
         # want a number divisible by 100 for downstream steps
         bin_size = bin_size - (bin_size % 100)
+
+        if bin_size < 1:
+            print_error("CoPTR-Ref", 
+                "{}\n{}\n{}".format("found complete reference genome with <500bp",
+                                "this is probably a mislabeled contig",
+                                "please check your .genomes file",
+                            )
+                )
 
         return bin_size
 
