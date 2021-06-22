@@ -37,14 +37,18 @@ def print_error(module, msg, quit=True):
         exit :  bool
             If TRUE, the program terminates after printing the error
     """
-    print("[ERROR] ({}) {}: {}".format(time.strftime("%b %d, %Y %X"), module, msg), file=sys.stderr, flush=True)
+    print(
+        "[ERROR] ({}) {}: {}".format(time.strftime("%b %d, %Y %X"), module, msg),
+        file=sys.stderr,
+        flush=True,
+    )
     if quit:
         exit(1)
 
 
 def print_warning(module, msg):
     """Print a warning message to the standard error.
-    
+
     Parameters
     ----------
         module : str
@@ -53,12 +57,16 @@ def print_warning(module, msg):
             The message itself
     """
 
-    print("[WARNING] ({}) {}: {}".format(time.strftime("%b %d, %Y %X"), module, msg), file=sys.stderr, flush=True)
+    print(
+        "[WARNING] ({}) {}: {}".format(time.strftime("%b %d, %Y %X"), module, msg),
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def print_info(module, msg):
     """Print an info message to the standard error.
-    
+
     Parameters
     ----------
         module : str
@@ -67,4 +75,8 @@ def print_info(module, msg):
             The message itself
     """
 
-    print("[INFO] ({}) {}: {}".format(time.strftime("%b %d, %Y %X"), module, msg), file=sys.stderr, flush=True)
+    print(
+        "[INFO] ({}) {}: {}".format(time.strftime("%b %d, %Y %X"), module, msg),
+        file=sys.stderr,
+        flush=True,
+    )
