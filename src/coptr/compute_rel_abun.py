@@ -21,13 +21,14 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import numpy as np
 import os
 import pickle as pkl
 
-from src.coptr_contig import CoPTRContig
-from src.coptr_ref import ReadFilterRef
-from src.print import print_info, print_warning
+import numpy as np
+
+from .coptr_contig import CoPTRContig
+from .coptr_ref import ReadFilterRef
+from .print import print_info
 
 
 def compute_rel_abun_from_coverage_maps(coverage_maps, min_reads, min_cov, min_samples):

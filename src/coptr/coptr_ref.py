@@ -23,14 +23,14 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 
 import math
 import multiprocessing as mp
-import numpy as np
 import os.path
 import pickle as pkl
+
+import numpy as np
 import scipy.optimize
 import scipy.stats
-import sys
 
-from src.print import print_error, print_info, print_warning
+from .print import print_error, print_info, print_warning
 
 
 class QCResult:
@@ -137,7 +137,7 @@ class ReadFilterRef:
         bin_size = bin_size - (bin_size % 100)
 
         if bin_size < 1:
-            print_error("CoPTR-Ref", 
+            print_error("CoPTR-Ref",
                 "{}\n{}\n{}".format("found complete reference genome with <500bp",
                                 "this is probably a mislabeled contig",
                                 "please check your .genomes file",
@@ -257,7 +257,7 @@ class ReadFilterRef:
             rolling_counts : np.array of float
                 The read count in each rolling bin
             endpoints : np.array of tuple
-                Each tuple gives the left (inclusive) and right (exclusive) 
+                Each tuple gives the left (inclusive) and right (exclusive)
                 end point of each bin.
         """
         step = math.ceil(bin_size/100)
@@ -277,7 +277,7 @@ class ReadFilterRef:
 
     def remove_reads_by_region(self, read_positions, genome_length, regions):
         """Remove reads that overlap a region in regions.
-        
+
         Parameters
         ----------
             read_positions : np.array of int
@@ -358,7 +358,7 @@ class ReadFilterRef:
             remove_regions.append( (remove_start, remove_end) )
 
         read_positions, new_genome_length = self.remove_reads_by_region(read_positions, genome_length, remove_regions)
-        
+
         binned_reads = self.bin_reads(read_positions, genome_length, bin_size)
         return read_positions, new_genome_length
 
@@ -437,7 +437,7 @@ class ReadFilterRef:
 
     def bin_reads(self, read_positions, genome_length, bin_size=10000):
         """Aggregate reads into bin_size windows and compute the read count in each window.
-        
+
         Parameters
         ----------
             read_positions : np.array of int
@@ -647,7 +647,7 @@ class CoPTRRef:
                 for ori in oris:
                     xs.append([ori, log_ptr])
             xs = np.array(xs)
-  
+
         # initial ori estimate, initial ptr estimate
         best_x = 0
         best_f = np.inf
@@ -719,7 +719,7 @@ class CoPTRRef:
     def update_ptrs(self, ori, ter, prv_log2_ptrs, read_locs_list):
         """Compute maximum likelihood PTR estimates across samples
         given an estimated replication origin and terminus.
-        
+
         Parameters
         ----------
             ori : float
@@ -842,7 +842,7 @@ def plot_fit(coptr_ref_est, read_positions, genome_length, min_reads, min_cov, p
     min_y = np.min(binned_counts[binned_counts != 0])
     min_y -= 0.5*min_y
     max_y = np.max(binned_counts[binned_counts != 0]) + 0.008*binned_counts.sum()
-    
+
     # plot bins
     ax[0].scatter(x, binned_counts)
     ax[0].set_yscale("log", base=2)
@@ -871,7 +871,7 @@ def plot_fit(coptr_ref_est, read_positions, genome_length, min_reads, min_cov, p
     ax[1].set_ylim((min_y, max_y))
 
     # plot fit
-    y = [  coptr.compute_log_likelihood(coptr_ref_est.ori_estimate, coptr_ref_est.ter_estimate, coptr_ref_est.estimate, xi) 
+    y = [  coptr.compute_log_likelihood(coptr_ref_est.ori_estimate, coptr_ref_est.ter_estimate, coptr_ref_est.estimate, xi)
            for xi in x ]
     y = np.power(2, y)*(x[1] - x[0])
     ax[1].plot(x, y, c="black", linewidth=3)

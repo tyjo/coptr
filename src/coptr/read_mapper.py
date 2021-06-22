@@ -22,16 +22,16 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import numpy as np
 import os
 import os.path
-import pysam
 import subprocess as sub
 import sys
 import time
 
-from src.print import print_error, print_info
-from src.util import get_fastq_name
+import pysam
+
+from .print import print_error, print_info
+from .util import get_fastq_name
 
 
 class ReadMapper:
@@ -215,7 +215,7 @@ class ReadMapper:
                     print_info("ReadMapper", "cleaning up {}".format(out_sam))
                     call = ["rm", out_sam]
                     sub.check_call(call)
-        
+
         # paired end sequencing
         elif os.path.isdir(inputf) and paired:
             valid_ext = [".fastq", "fq", ".gz"]

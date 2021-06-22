@@ -24,6 +24,7 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 import sys
 import time
 
+
 def print_error(module, msg, quit=True):
     """Print an error message to the standard error.
 

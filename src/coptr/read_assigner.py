@@ -23,14 +23,11 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+import scipy.misc
 import scipy.special
 import scipy.stats
-import scipy.misc
-
-from scipy.special import digamma
-from scipy.special import loggamma
-
 from scipy.sparse import csr_matrix
+from scipy.special import digamma
 
 
 class ReadAssigner(object):

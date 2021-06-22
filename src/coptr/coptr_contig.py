@@ -21,18 +21,16 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import math
 import multiprocessing as mp
-import numpy as np
 import os.path
 import pickle as pkl
+
+import numpy as np
 import scipy.special
 import scipy.stats
-import sys
 
-from src.poisson_pca import PoissonPCA
-from src.print import print_info, print_warning, print_error
-
+from .poisson_pca import PoissonPCA
+from .print import print_error, print_info
 
 
 class CoPTRContigEstimate:
@@ -76,7 +74,7 @@ class CoPTRContigEstimate:
 
 class CoPTRContig:
     """Estimate PTRs from draft assemblies.
-    
+
     Parameters
     ----------
         min_reads : float
@@ -274,7 +272,7 @@ class CoPTRContig:
 
     def estimate_ptrs(self, coverage_maps, return_bins=False):
         """Estimate PTRs across multiple samples of the same reference genome.
-        
+
         Parameters
         ----------
             coverage_maps : list[CoverageMapContig]

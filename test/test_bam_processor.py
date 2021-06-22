@@ -1,13 +1,15 @@
 import os
-import pysam
 import unittest
 
-from src.bam_processor import BamProcessor
+import pysam
+
+from coptr.bam_processor import BamProcessor
+
 
 def read_to_dict(read):
     read = read.strip("\n").split()
     read_dict = {
-        "name"          : read[0], 
+        "name"          : read[0],
         "flag"          : read[1],
         "ref_name"      : read[2],
         "ref_pos"       : read[3],
@@ -26,9 +28,9 @@ def read_to_dict(read):
 class TestBamProcessor(unittest.TestCase):
 
     def setUp(self):
-        header = { 
+        header = {
             "HD" : {"VN": "1.0", "SO": "unsorted"},
-            "SQ" : 
+            "SQ" :
                 [
                     {"SN": "ref1|seq1", "LN" : 1000000},
                     {"SN": "ref1|seq2", "LN" : 1000000},

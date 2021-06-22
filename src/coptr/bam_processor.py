@@ -1,7 +1,7 @@
 """
 bam_processor.py
 ======================
-Extract coordinates along each reference sequence and group reference 
+Extract coordinates along each reference sequence and group reference
 sequences by genome.
 """
 
@@ -25,17 +25,15 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 import array
 import bisect
 import math
-import numpy as np
 import os.path
-import pysam
 import re
-import sys
 
-from scipy.sparse import lil_matrix, csr_matrix
+import numpy as np
+import pysam
+from scipy.sparse import csr_matrix
 
-from src.print import print_info
-from src.read_assigner import ReadAssigner
-
+from .print import print_info
+from .read_assigner import ReadAssigner
 
 
 class ReadContainer:
@@ -57,7 +55,7 @@ class ReadContainer:
 
 
     def check_add_mapping(self, query_id, ref_name, ref_position, score):
-        """Stores a mapping if it has an alignment score greater than or equal 
+        """Stores a mapping if it has an alignment score greater than or equal
         to the mappings seen so far.
 
         Parameters
@@ -103,7 +101,7 @@ class ReadContainer:
 
     def get_mappings(self, query_id):
         """Return the highest scoring mappings for a read.
-        
+
         Parameters
         ----------
             query_id : str
@@ -240,7 +238,7 @@ class BamProcessor:
                 and the value is the length of that reference sequence
         """
         lengths = self.get_ref_seq_lengths(bam_file)
-        
+
         read_container = ReadContainer()
 
         alignment_file = pysam.AlignmentFile(bam_file, self.read_mode)
@@ -405,7 +403,7 @@ class BamProcessor:
         for read_id in sorted(read_container.reads):
             ref_names, ref_positions = read_container.get_mappings(read_id)
             ref_genomes = [ref_seq_genome_id[r] for r in ref_names]
-            
+
             # the read maps twice to the same genome
             if len(ref_genomes) != np.unique(ref_genomes).size:
                 discarded_reads.add(read_id)
@@ -464,7 +462,7 @@ class BamProcessor:
                         ref_seq_genome_id[ref_name] = genome_id
                     genome_id = ref_seq_genome_id[ref_name]
                     mapping_genome_ids.append(genome_id)
-                
+
                 assignment_id = assignments[current_row]
                 assigned_genome = genome_ids[assignment_id]
                 sequence_id = mapping_genome_ids.index(assigned_genome)
@@ -599,7 +597,7 @@ class BamProcessor:
             bf.close()
 
         # combined header
-        header = { 
+        header = {
             "HD" : {"VN": "1.0", "SO": "unsorted"},
             "SQ" : [{"SN": sq, "LN" : seq_len[sq]} for sq in sorted(seq_len)]
         }
@@ -712,7 +710,7 @@ class CoverageMapRef(CoverageMap):
 
     def get_length(self):
         """Get the lenth of the genome.
-        
+
         Returns
         -------
             length : int
@@ -859,7 +857,7 @@ class CoverageMapContig(CoverageMap):
 
     def get_length(self, contig_id):
         """Get the length of a contig.
-        
+
         Parameters
         ----------
             contig_id : str
@@ -876,12 +874,12 @@ class CoverageMapContig(CoverageMap):
 
     def get_reads(self, contig_id):
         """Get the coordinates of all reads for a contig.
-        
+
         Parameters
         ----------
             contig_id : str
                 Reference sequence id of the contig
-        
+
         Returns
         -------
             reads : numpy.array

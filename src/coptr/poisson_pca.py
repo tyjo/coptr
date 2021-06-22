@@ -21,9 +21,11 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import sys
+
 import numpy as np
 import scipy.optimize
-import sys
+
 
 class PoissonPCA:
     """Principal Component Analysis with Poisson observations.

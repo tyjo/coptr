@@ -1,11 +1,13 @@
-import numpy as np
 import pickle as pkl
-import scipy.stats
 import unittest
 
-from src.bam_processor import CoverageMapContig
-from src.coptr_ref import CoPTRRef
-from src.coptr_contig import CoPTRContig
+import numpy as np
+import scipy.stats
+
+from coptr.bam_processor import CoverageMapContig
+from coptr.coptr_contig import CoPTRContig
+from coptr.coptr_ref import CoPTRRef
+
 
 class TestCoPTR(unittest.TestCase):
 
@@ -119,7 +121,7 @@ class Simulator:
         # convert counts to coordinates
         read_positions = []
         for i,c in enumerate(binned_counts):
-            size = binned_counts.size 
+            size = binned_counts.size
             m = (0.5*(2*i + 1)/size)
             read_positions += [m for i in range(c)]
         read_positions = self.get_genome_length()*np.array(read_positions)

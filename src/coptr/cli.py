@@ -16,20 +16,22 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import argparse
-import numpy as np
 import os
 import os.path
 import pickle as pkl
 import sys
 
-from src.bam_processor import BamProcessor, CoverageMapRef, CoverageMapContig
-from src.coptr_contig import estimate_ptrs_coptr_contig
-from src.coptr_ref import estimate_ptrs_coptr_ref
-from src.compute_read_counts import compute_read_counts
-from src.compute_rel_abun import compute_rel_abun
-from src.print import print_error, print_info
-from src.read_mapper import ReadMapper
-from src.util import get_fastq_name
+import numpy as np
+
+from .bam_processor import BamProcessor
+from .compute_read_counts import compute_read_counts
+from .compute_rel_abun import compute_rel_abun
+from .coptr_contig import estimate_ptrs_coptr_contig
+from .coptr_ref import estimate_ptrs_coptr_ref
+from .print import print_error, print_info
+from .read_mapper import ReadMapper
+from .util import get_fastq_name
+
 
 VERSION="1.1.1"
 
@@ -100,7 +102,7 @@ command: index            create a bowtie2 index for a reference database
         )
         parser.add_argument("--paired", action="store_true",
             help="Set for paired end reads. Assumes fastq files end in _1.* and _2.*")
-        parser.add_argument("--threads", type=int, default=1, 
+        parser.add_argument("--threads", type=int, default=1,
             help="Number of threads for bowtie2 mapping."
         )
         parser.add_argument("--bt2-k", type=int, default=self.default_bt2_k,
@@ -172,7 +174,7 @@ command: index            create a bowtie2 index for a reference database
                     print_info("BamProcessor", "output for {} already found, skipping".format(fname))
                     continue
 
-                # don't process the rest of the bam file if we just want to 
+                # don't process the rest of the bam file if we just want to
                 # sanity check the regular expression
                 if args.check_regex:
                     continue
@@ -283,11 +285,11 @@ command: index            create a bowtie2 index for a reference database
 
         sample_ids = sorted(list(sample_ids))
         results_ref = estimate_ptrs_coptr_ref(
-            ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov, 
+            ref_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_cov,
             threads=args.threads, plot_folder=args.plot
         )
         results_contig = estimate_ptrs_coptr_contig(
-            assembly_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_samples, 
+            assembly_genome_ids, grouped_coverage_map_folder, args.min_reads, args.min_samples,
             threads=args.threads, plot_folder=args.plot
         )
 
