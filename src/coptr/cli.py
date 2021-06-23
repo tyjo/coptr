@@ -584,5 +584,6 @@ command: index            create a bowtie2 index for a reference database
         print_info("CoPTR", "done!")
 
 
-if __name__ == "__main__":
+def cli():
+    """Serve as an entry point for command line calls."""
     ProgramOptions()
