@@ -32,17 +32,16 @@ from .print import print_error, print_info
 from .read_mapper import ReadMapper
 from .util import get_fastq_name
 
-
-VERSION = "1.1.1"
+from .__init__ import __version__
 
 
 class ProgramOptions:
     def __init__(self):
         parser = argparse.ArgumentParser(
             description="CoPTR (v{}): Compute PTRs from complete reference genomes and assemblies.".format(
-                VERSION
+                __version__
             ),
-            usage="""coptr.py <command> [options]
+            usage="""coptr <command> [options]
 
 command: index            create a bowtie2 index for a reference database
          map              map reads against a reference database
@@ -70,7 +69,7 @@ command: index            create a bowtie2 index for a reference database
 
     def index(self):
         parser = argparse.ArgumentParser(
-            usage="coptr.py index [-h] [--bt2-bmax BT2_BMAX] [--bt2-dcv BT2_DCV] [--bt2-threads BT2_THREADS] [--bt2-packed] ref-fasta index-out"
+            usage="coptr index [-h] [--bt2-bmax BT2_BMAX] [--bt2-dcv BT2_DCV] [--bt2-threads BT2_THREADS] [--bt2-packed] ref-fasta index-out"
         )
         parser.add_argument(
             "ref_fasta",
@@ -117,7 +116,7 @@ command: index            create a bowtie2 index for a reference database
 
     def map(self):
         parser = argparse.ArgumentParser(
-            usage="coptr.py map [-h] [--threads INT] [--bt2-k INT] [--paired] index input out-folder"
+            usage="coptr map [-h] [--threads INT] [--bt2-k INT] [--paired] index input out-folder"
         )
         parser.add_argument("index", help="Name of database index.")
         parser.add_argument(
@@ -164,7 +163,7 @@ command: index            create a bowtie2 index for a reference database
 
     def merge(self):
         parser = argparse.ArgumentParser(
-            usage="coptr.py merge [-h] in-bam1 in-bam2 ... in-bamN out-bam"
+            usage="coptr merge [-h] in-bam1 in-bam2 ... in-bamN out-bam"
         )
         parser.add_argument(
             "in-bams",
@@ -186,7 +185,7 @@ command: index            create a bowtie2 index for a reference database
 
     def extract(self):
         parser = argparse.ArgumentParser(
-            usage="coptr.py extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex] in-folder out-folder"
+            usage="coptr extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex] in-folder out-folder"
         )
         parser.add_argument("in_folder", help="Folder with BAM files.")
         parser.add_argument("out_folder", help="Folder to store coverage maps.")
@@ -258,7 +257,7 @@ command: index            create a bowtie2 index for a reference database
 
     def estimate(self):
         parser = argparse.ArgumentParser(
-            usage="""usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] [--threads THREADS] [--plot OUTFOLDER] [--restart] coverage-map-folder out-file
+            usage="""usage: coptr estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] [--threads THREADS] [--plot OUTFOLDER] [--restart] coverage-map-folder out-file
         """
         )
         parser.add_argument(
@@ -457,7 +456,7 @@ command: index            create a bowtie2 index for a reference database
 
     def count(self):
         parser = argparse.ArgumentParser(
-            usage="""usage: coptr.py count [-h] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] coverage-map-folder out-file
+            usage="""usage: coptr count [-h] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] coverage-map-folder out-file
         """
         )
         parser.add_argument(
@@ -518,7 +517,7 @@ command: index            create a bowtie2 index for a reference database
 
     def rabun(self):
         parser = argparse.ArgumentParser(
-            usage="""usage: coptr.py rabun [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] coverage-map-folder out-file
+            usage="""usage: coptr rabun [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--min-samples MIN_SAMPLES] coverage-map-folder out-file
         """
         )
         parser.add_argument(
