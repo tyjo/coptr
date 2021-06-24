@@ -3,7 +3,7 @@ import unittest
 
 import pysam
 
-from coptr.bam_processor import BamProcessor
+from src.coptr.bam_processor import BamProcessor
 
 
 def read_to_dict(read):
