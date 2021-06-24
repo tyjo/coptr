@@ -18,17 +18,18 @@ You can then create a new environment to run coPTR:
     .. code-block::
 
       # creates an environment called coptr
-      $ conda env create -f coptr-env.yml
+      $ conda env create -f coptr.yml
 
       # you only need to create this once
       # to activate the environment:
       $ conda activate coptr
+      $ pip install .
 
-To check if you can run coPTR:
+To check if you can run CoPTR:
 
     .. code-block::
 
-      $ python coptr.py
+      $ coptr
 
       usage: coptr.py <command> [options]
 
@@ -50,7 +51,7 @@ To check if you can run coPTR:
 
 Dependencies
 ------------
-Installation using conda will install all required dependencies. However,
+Installation using conda iswill install all required dependencies. However,
 CoPTR's dependencies are listed below if you wish to install them manually.
 
 * bowtie2 (>=2.4.1): CoPTR assumes bowtie2 is install and accessible from your PATH variable

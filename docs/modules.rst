@@ -1,26 +1,26 @@
 Modules
 =======
 
-.. automodule:: src.bam_processor
+.. automodule:: src.coptr.bam_processor
    :members:
 
-.. automodule:: src.coptr_contig
+.. automodule:: src.coptr.coptr_contig
    :members:
 
-.. automodule:: src.coptr_ref
+.. automodule:: src.coptr.coptr_ref
    :members:
 
-.. automodule:: src.poisson_pca
+.. automodule:: src.coptr.poisson_pca
    :members:
 
-.. automodule:: src.print
+.. automodule:: src.coptr.print
    :members:
 
-.. automodule:: src.read_mapper
+.. automodule:: src.coptr.read_mapper
    :members:
 
-.. automodule:: src.read_assigner
+.. automodule:: src.coptr.read_assigner
    :members:
 
-.. automodule:: src.util
+.. automodule:: src.coptr.util
    :members:

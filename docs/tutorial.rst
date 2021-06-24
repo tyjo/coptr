@@ -58,7 +58,7 @@ Indexing the reference database
 
 .. code-block:: text
 
-    $ python coptr.py index example-data/ref-db example-data/ref-db/example-index
+    $ coptr index example-data/ref-db example-data/ref-db/example-index
     [INFO] (Sep 10, 2020 18:06:41) ReadMapper: found 2 files totaling 0.006 Gb
     [INFO] (Sep 10, 2020 18:06:41) ReadMapper: copying to fasta files to coptr-fna-1599775601.629647.fna with prepended genome ids (filenames)
     [INFO] (Sep 10, 2020 18:06:41) ReadMapper: writing 2 reference genome ids to example-data/ref-db/example-index.genomes
@@ -76,11 +76,11 @@ file, with the filename prepended to each sequencing id. This is how CoPTR
 keeps track of contigs from the same assembly.
 
 Indexing a database of fasta files can be accomplished by calling
-``coptr.py index``:
+``coptr index``:
 
 .. code-block:: text
 
-    usage: coptr.py index [-h] [--bt2-bmax BT2_BMAX] [--bt2-dcv BT2_DCV] [--bt2-threads BT2_THREADS] [--bt2-packed] ref-fasta index-out
+    usage: coptr index [-h] [--bt2-bmax BT2_BMAX] [--bt2-dcv BT2_DCV] [--bt2-threads BT2_THREADS] [--bt2-packed] ref-fasta index-out
 
     positional arguments:
       ref_fasta             File or folder containing fasta to index. If a folder,
@@ -113,7 +113,7 @@ Notes on memory usage
 ---------------------
 Sometimes the database is too large for a single index. You can split the
 reference database into multiple parts, and index each separately. After
-read mapping, the resulting BAM files can be merged with ```coptr.py merge```.
+read mapping, the resulting BAM files can be merged with ```coptr merge```.
 
 Mapping reads
 =============
@@ -122,7 +122,7 @@ Mapping reads
 
 .. code-block:: text
 
-    $ python coptr.py map example-data/ref-db/example-index example-data/fastq example-data/bam
+    $ coptr map example-data/ref-db/example-index example-data/fastq example-data/bam
     [INFO] (Aug 31, 2020 12:12:10) ReadMapper: mapping example-data/fastq/ERR969281.fastq.gz to example-data/bam/ERR969281.sam
     [INFO] (Aug 31, 2020 12:12:10) ReadMapper: bowtie2 -x example-data/ref-db/example-index example-data/fastq/ERR969281.fastq.gz --no-unal -p 1
     10818 reads; of these:
@@ -144,7 +144,7 @@ convenient:
 
 .. code-block:: text
 
-    usage: coptr.py map [-h] [--threads INT] [--paired] index input out-folder
+    usage: coptr map [-h] [--threads INT] [--paired] index input out-folder
 
     positional arguments:
       index              Name of database index.
@@ -161,7 +161,7 @@ convenient:
       --bt2-k BT2_K      (Default 10). Number of alignments to report. Passed to -k flag of
                          bowtie2.
 
-The name of the database index corresponds to the name used from ``coptr.py index``.
+The name of the database index corresponds to the name used from ``coptr index``.
 The input can either be a single fastq file, or a folder of fastq files to map.
 It also takes an optional ``--threads`` argument that allows bowtie2 to use
 multiple threads. Reads are output as ``bam`` files to save space.
@@ -174,11 +174,11 @@ Merging mapped reads from multiple indexes
 For large reference databases, it is sometimes necessary to create several
 indexes for subsets of the data and map reads against each index. Results
 from each index need to be merged to select reads with the best MAPQ across
-indexes. You can use ```coptr.py merge``` to merge multiple bam files.
+indexes. You can use ```coptr merge``` to merge multiple bam files.
 
 .. code-block:: text
 
-    usage: coptr.py merge [-h] in-bam1 in-bam2 ... in-bamN out-bam
+    usage: coptr merge [-h] in-bam1 in-bam2 ... in-bamN out-bam
 
     positional arguments:
       in-bams     A space separateed list of BAM files to merge. Assumes same
@@ -195,7 +195,7 @@ Computing coverage maps
 
 .. code-block:: text
 
-    $ python coptr.py extract example-data/bam example-data/coverage-maps
+    $ coptr extract example-data/bam example-data/coverage-maps
     [INFO] (Jan 18, 2021 10:31:43) BamProcessor: processing example-data/bam/ERR969281.bam
     [INFO] (Jan 18, 2021 10:31:43) BamProcessor: determining reference genomes
     [INFO] (Jan 18, 2021 10:31:43) BamProcessor: collecting multi-mapped reads
@@ -210,7 +210,7 @@ assembly are collected.
 
 .. code-block:: text
 
-    usage: usage: coptr.py extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex]
+    usage: usage: coptr extract [-h] [--ref-genome-regex REF_GENOME_REGEX] [--check-regex]
                     in-folder out-folder
 
     positional arguments:
@@ -227,7 +227,7 @@ assembly are collected.
 
 The important argument here is the ``--ref-genome-regex``. This is a regular
 expression that extracts the reference genome id from a sequence id. The default
-argument will work with the index created by ```coptr.py index```, and works by
+argument will work with the index created by ```coptr index```, and works by
 prepending the name of the fasta file, and special character ```|``` to each
 sequence id.
 
@@ -250,7 +250,7 @@ Estimating PTRs
 
 .. code-block:: text
 
-    # python coptr.py estimate example-data/coverage-maps out --min-reads 2500
+    # coptr estimate example-data/coverage-maps out --min-reads 2500
     [INFO] (Jan 18, 2021 10:36:05) CoPTR: grouping reads by reference genome
     [INFO] (Jan 18, 2021 10:36:05) CoPTR: saving to example-data/coverage-maps/coverage-maps-genome
     [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969281.cm.pkl
@@ -279,7 +279,7 @@ on all samples at once.**
 
 .. code-block:: text
 
-    usage: coptr.py estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] coverage-map-folder out-file
+    usage: coptr estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] coverage-map-folder out-file
 
     positional arguments:
       coverage_map_folder   Folder with coverage maps computed from 'extract'.
