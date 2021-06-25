@@ -1,46 +1,46 @@
 import os
-import pysam
 import unittest
 
-from src.bam_processor import BamProcessor
+import pysam
+
+from coptr.bam_processor import BamProcessor
+
 
 def read_to_dict(read):
     read = read.strip("\n").split()
     read_dict = {
-        "name"          : read[0], 
-        "flag"          : read[1],
-        "ref_name"      : read[2],
-        "ref_pos"       : read[3],
-        "map_quality"   : read[4],
-        "cigar"         : read[5],
-        "next_ref_name" : read[6],
-        "next_ref_pos"  : read[7],
-        "length"        : read[8],
-        "seq"           : read[9],
-        "qual"          : read[10],
-        "tags"          : read[11:]
+        "name": read[0],
+        "flag": read[1],
+        "ref_name": read[2],
+        "ref_pos": read[3],
+        "map_quality": read[4],
+        "cigar": read[5],
+        "next_ref_name": read[6],
+        "next_ref_pos": read[7],
+        "length": read[8],
+        "seq": read[9],
+        "qual": read[10],
+        "tags": read[11:],
     }
     return read_dict
 
 
 class TestBamProcessor(unittest.TestCase):
-
     def setUp(self):
-        header = { 
-            "HD" : {"VN": "1.0", "SO": "unsorted"},
-            "SQ" : 
-                [
-                    {"SN": "ref1|seq1", "LN" : 1000000},
-                    {"SN": "ref1|seq2", "LN" : 1000000},
-                    {"SN": "ref2|seq1", "LN" : 1000000}
-                ]
+        header = {
+            "HD": {"VN": "1.0", "SO": "unsorted"},
+            "SQ": [
+                {"SN": "ref1|seq1", "LN": 1000000},
+                {"SN": "ref1|seq2", "LN": 1000000},
+                {"SN": "ref2|seq1", "LN": 1000000},
+            ],
         }
 
         bam1_reads = [
             "read1     0       ref1|seq1      24975   42      80M     *       0       0       TGGGCCAGAAAAAATGACTTCTCCATCTCGCTGCCGGTAGACCGACTCTCTTTTCTGCTGGCGGTTGCCACGCTGAGCGG        AAAAAF.A.FFAFFFFFAFFFFFFFFFFFFFF<FFFFAFFFFFFA.FFFFA<7FFFFFFFF<FFFFFF))<FFFFF.FFF        AS:i:-3 XN:i:0  XM:i:1  XO:i:0  XG:i:0  NM:i:1  MD:Z:76A3       YT:Z:UU",
             "read2     0       ref1|seq1      20984   42      80M     *       0       0       GTTTAAACAGTTGTTGTTGTTCTTCCTGCGATACTCCACTTCCAGAAGCCATAATCGTCATTTTGATAACAGCGTGGTTG        AAAAA.<FFAFFFFFFF<FFAFF)FFFFF<FFF.FFA)FFAF<F<F<.FF<F.FFAFFF7FAFFF.AF.<)F7FFAAFFF        AS:i:-6 XN:i:0  XM:i:2  XO:i:0  XG:i:0  NM:i:2  MD:Z:33A13T32   YT:Z:UU",
             "read3     0       ref2|seq1       3210    42      80M     *       0       0       ACCTACCACTTCACCGACATATTCATGGCCCACGACCATCGGCACCGGGATGGATTTTTGCGACCACTCATCCCAGTTAT        AAAA7FAFFFFF.FFFFF<FFFAA7FFFFFF7FFFFFFFA<FF7FFAF<F.FF.FFF7FFFFAF<FFFFAFFFFA77FFF        AS:i:-3 XN:i:0  XM:i:1  XO:i:0  XG:i:0  NM:i:1  MD:Z:53T26      YT:Z:UU",
-            "read4     0       ref1|seq2       9298    23      79M     *       0       0       CAGCATCGCTTCCAAAAATAGTAGTGCAGTTGATCGGAGTAGGAGCGTAATGGATTGCCTGCGTGATTGGCTATCTGGC AAAAAF.A.FFAFFFFFAFFFFFFFFFFFFFF<FFFFAFFFFFFA.FFFFA<7FFFFFFFF<FFFFFF))<FFFFF.FF AS:i:-23        XN:i:0  XM:i:6  XO:i:0  XG:i:0  NM:i:6  MD:Z:19T8A0C2T4T10T30   YT:Z:UU"
+            "read4     0       ref1|seq2       9298    23      79M     *       0       0       CAGCATCGCTTCCAAAAATAGTAGTGCAGTTGATCGGAGTAGGAGCGTAATGGATTGCCTGCGTGATTGGCTATCTGGC AAAAAF.A.FFAFFFFFAFFFFFFFFFFFFFF<FFFFAFFFFFFA.FFFFA<7FFFFFFFF<FFFFFF))<FFFFF.FF AS:i:-23        XN:i:0  XM:i:6  XO:i:0  XG:i:0  NM:i:6  MD:Z:19T8A0C2T4T10T30   YT:Z:UU",
         ]
 
         aln_header = pysam.AlignmentHeader().from_dict(header)
@@ -53,7 +53,7 @@ class TestBamProcessor(unittest.TestCase):
 
         bam2_reads = [
             "read1     0       ref2|seq1      24975   50      80M     *       0       0       TGGGCCAGAAAAAATGACTTCTCCATCTCGCTGCCGGTAGACCGACTCTCTTTTCTGCTGGCGGTTGCCACGCTGAGCGG        AAAAAF.A.FFAFFFFFAFFFFFFFFFFFFFF<FFFFAFFFFFFA.FFFFA<7FFFFFFFF<FFFFFF))<FFFFF.FFF        AS:i:0 XN:i:0  XM:i:1  XO:i:0  XG:i:0  NM:i:1  MD:Z:76A3       YT:Z:UU",
-            "read2     0       ref2|seq1      20984   30      80M     *       0       0       GTTTAAACAGTTGTTGTTGTTCTTCCTGCGATACTCCACTTCCAGAAGCCATAATCGTCATTTTGATAACAGCGTGGTTG        AAAAA.<FFAFFFFFFF<FFAFF)FFFFF<FFF.FFA)FFAF<F<F<.FF<F.FFAFFF7FAFFF.AF.<)F7FFAAFFF        AS:i:-12 XN:i:0  XM:i:2  XO:i:0  XG:i:0  NM:i:2  MD:Z:33A13T32   YT:Z:UU"
+            "read2     0       ref2|seq1      20984   30      80M     *       0       0       GTTTAAACAGTTGTTGTTGTTCTTCCTGCGATACTCCACTTCCAGAAGCCATAATCGTCATTTTGATAACAGCGTGGTTG        AAAAA.<FFAFFFFFFF<FFAFF)FFFFF<FFF.FFA)FFAF<F<F<.FF<F.FFAFFF7FAFFF.AF.<)F7FFAAFFF        AS:i:-12 XN:i:0  XM:i:2  XO:i:0  XG:i:0  NM:i:2  MD:Z:33A13T32   YT:Z:UU",
         ]
 
         test_bam2 = pysam.AlignmentFile("test/test_bam2.bam", "wb", header=header)
@@ -62,11 +62,9 @@ class TestBamProcessor(unittest.TestCase):
             test_bam2.write(aln_segment.from_dict(read, aln_header))
         test_bam2.close()
 
-
     def tearDown(self):
         os.remove("test/test_bam1.bam")
         os.remove("test/test_bam2.bam")
-
 
     def test_process_bam(self):
         bam_processor = BamProcessor()
@@ -84,15 +82,22 @@ class TestBamProcessor(unittest.TestCase):
         self.assertFalse(coverage_maps[genome2].is_assembly)
 
         # check that reads are stored
-        self.assertTrue(3210  - 1 in coverage_maps[genome2].read_positions)
-        self.assertTrue(24975 - 1 in coverage_maps[genome1].contig_read_positions["ref1|seq1"])
-        self.assertTrue(20984 - 1 in coverage_maps[genome1].contig_read_positions["ref1|seq1"])
-        self.assertTrue(9298  - 1 in coverage_maps[genome1].contig_read_positions["ref1|seq2"])
-
+        self.assertTrue(3210 - 1 in coverage_maps[genome2].read_positions)
+        self.assertTrue(
+            24975 - 1 in coverage_maps[genome1].contig_read_positions["ref1|seq1"]
+        )
+        self.assertTrue(
+            20984 - 1 in coverage_maps[genome1].contig_read_positions["ref1|seq1"]
+        )
+        self.assertTrue(
+            9298 - 1 in coverage_maps[genome1].contig_read_positions["ref1|seq2"]
+        )
 
     def test_merge_bam(self):
         bam_processor = BamProcessor()
-        bam_processor.merge(["test/test_bam1.bam", "test/test_bam2.bam"], "test/test_bam_merged.bam")
+        bam_processor.merge(
+            ["test/test_bam1.bam", "test/test_bam2.bam"], "test/test_bam_merged.bam"
+        )
 
         infile = pysam.AlignmentFile("test/test_bam_merged.bam", "rb")
         nreads = 0

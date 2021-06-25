@@ -21,18 +21,16 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import math
 import multiprocessing as mp
-import numpy as np
 import os.path
 import pickle as pkl
+
+import numpy as np
 import scipy.special
 import scipy.stats
-import sys
 
-from src.poisson_pca import PoissonPCA
-from src.print import print_info, print_warning, print_error
-
+from .poisson_pca import PoissonPCA
+from .print import print_error, print_info
 
 
 class CoPTRContigEstimate:
@@ -67,8 +65,13 @@ class CoPTRContigEstimate:
 
     def __str__(self):
         return "CoPTRContigEstimate(bam_file={}, genome_id={}, sample_id={}, estimate={:.3f}, nreads={}, cov_frac={})".format(
-            self.bam_file, self.genome_id, self.sample_id, self.estimate, self.nreads, self.cov_frac
-            )
+            self.bam_file,
+            self.genome_id,
+            self.sample_id,
+            self.estimate,
+            self.nreads,
+            self.cov_frac,
+        )
 
     def __repr__(self):
         return self.__str__()
@@ -76,7 +79,7 @@ class CoPTRContigEstimate:
 
 class CoPTRContig:
     """Estimate PTRs from draft assemblies.
-    
+
     Parameters
     ----------
         min_reads : float
@@ -88,7 +91,6 @@ class CoPTRContig:
     def __init__(self, min_reads, min_samples):
         self.min_reads = min_reads
         self.min_samples = min_samples
-
 
     def compute_genomewide_bounds(self, binned_counts, crit_region=0.05):
         """Compute bounds on read counts in bins.
@@ -113,13 +115,12 @@ class CoPTRContig:
         std = np.max((1, std))
 
         norm = scipy.stats.norm()
-        m = norm.ppf(1-crit_region)
+        m = norm.ppf(1 - crit_region)
 
-        lower_bound = np.power(2, median - m*std)
-        upper_bound = np.power(2, median + m*std)
+        lower_bound = np.power(2, median - m * std)
+        upper_bound = np.power(2, median + m * std)
 
         return lower_bound, upper_bound
-
 
     def construct_coverage_matrix(self, coverage_maps):
         """Aggregate coverage maps into a bin by sample matrix.
@@ -147,7 +148,13 @@ class CoPTRContig:
             for contig_id in sorted(contig_ids):
 
                 if contig_id not in cm.contig_ids:
-                    print_error("CoPTRContig", "missing contig {} from {} in {}".format(contig_id, ref_genome, cm.sample_id), quit=True)
+                    print_error(
+                        "CoPTRContig",
+                        "missing contig {} from {} in {}".format(
+                            contig_id, ref_genome, cm.sample_id
+                        ),
+                        quit=True,
+                    )
 
                 length = cm.get_length(contig_id)
                 if length < 11000:
@@ -161,7 +168,6 @@ class CoPTRContig:
         # bin by sample
         A = np.array(A).T
         return A
-
 
     def estimate_slope_intercept(self, bin_log_probs):
         """Estimate the slope along reordering bins using least squares.
@@ -181,16 +187,15 @@ class CoPTRContig:
         rng = np.linspace(0, 1, bin_log_probs.size)
         y = bin_log_probs
         x = np.ones((y.size, 2))
-        x[:,0] = rng
+        x[:, 0] = rng
 
         sol, residuals, rank, s = np.linalg.lstsq(x, y, rcond=None)
-        m,b = sol
+        m, b = sol
 
-        pred = m*rng + b
+        pred = m * rng + b
         residuals = y - pred
 
-        return m,b,residuals
-
+        return m, b, residuals
 
     def compute_log_likelihood(self, log2_ptr, binned_counts):
         """Compute the log likelihood of reordered bin probabilities given a log2(PTR).
@@ -214,7 +219,7 @@ class CoPTRContig:
         x = np.linspace(0, 1, binned_counts.size)
         # change to base e
         loge_ptr = log2_ptr / np.log2(np.e)
-        log_probs = np.array([loge_ptr*xi for xi in x])
+        log_probs = np.array([loge_ptr * xi for xi in x])
         log_norm = scipy.special.logsumexp(log_probs)
         log_probs -= log_norm
 
@@ -224,10 +229,9 @@ class CoPTRContig:
         # log_norm = np.log2(np.power(2, log_probs).sum())
         # log_probs -= log_norm
 
-        log_lk = (binned_counts*log_probs).sum()
+        log_lk = (binned_counts * log_probs).sum()
 
         return log_lk
-
 
     def estimate_ptr_maximum_likelihood(self, binned_counts):
         """Compute maximum likelihood estimates of log2(PTR) gived observed reads.
@@ -255,7 +259,7 @@ class CoPTRContig:
         x = np.linspace(0, 1, binned_counts.size)
         # compute normalized probabilities
         loge_ptr = log2_ptr / np.log2(np.e)
-        log_probs = np.array([loge_ptr*xi for xi in x])
+        log_probs = np.array([loge_ptr * xi for xi in x])
         log_norm = scipy.special.logsumexp(log_probs)
         log_probs -= log_norm
         probs = np.exp(log_probs)
@@ -271,10 +275,9 @@ class CoPTRContig:
 
         return log2_ptr, intercept, log_lk, flip
 
-
     def estimate_ptrs(self, coverage_maps, return_bins=False):
         """Estimate PTRs across multiple samples of the same reference genome.
-        
+
         Parameters
         ----------
             coverage_maps : list[CoverageMapContig]
@@ -313,7 +316,14 @@ class CoPTRContig:
             else:
                 bam_file = cm.bam_file
                 genome_id = cm.genome_id
-                estimate = CoPTRContigEstimate(cm.bam_file, cm.genome_id, cm.sample_id, np.nan, cm.reads, cm.frac_nonzero)
+                estimate = CoPTRContigEstimate(
+                    cm.bam_file,
+                    cm.genome_id,
+                    cm.sample_id,
+                    np.nan,
+                    cm.reads,
+                    cm.frac_nonzero,
+                )
                 estimates.append(estimate)
                 parameters.append((np.nan, np.nan))
                 binned_counts.append([np.nan])
@@ -332,7 +342,6 @@ class CoPTRContig:
         A = self.construct_coverage_matrix(passing_coverage_maps)
         nbins = A.shape[0]
 
-
         # filter out low coverage and high coverage bins,
         # remove samples with too few reads
         A_filtered = []
@@ -342,9 +351,11 @@ class CoPTRContig:
 
         tmp = []
         np.set_printoptions(suppress=True)
-        for i,col in enumerate(A.T):
+        for i, col in enumerate(A.T):
 
-            lower_bound, upper_bound = self.compute_genomewide_bounds(col, crit_region=0.05)
+            lower_bound, upper_bound = self.compute_genomewide_bounds(
+                col, crit_region=0.05
+            )
             col[np.logical_or(col > upper_bound, col < lower_bound)] = np.nan
 
             frac_filtered = np.isnan(col).sum() / col.size
@@ -361,17 +372,25 @@ class CoPTRContig:
                 sample_id = passing_coverage_maps[i].sample_id
                 frac_nonzero = passing_coverage_maps[i].frac_nonzero
                 m = np.nan
-                estimate = CoPTRContigEstimate(bam_file, genome_id, sample_id, np.nan, reads, frac_nonzero)
+                estimate = CoPTRContigEstimate(
+                    bam_file, genome_id, sample_id, np.nan, reads, frac_nonzero
+                )
                 estimates.append(estimate)
                 parameters.append((np.nan, np.nan))
                 binned_counts.append([np.nan])
-
 
         if len(A_filtered) < self.min_samples:
             for cm in tmp:
                 bam_file = cm.bam_file
                 genome_id = cm.genome_id
-                estimate = CoPTRContigEstimate(cm.bam_file, cm.genome_id, cm.sample_id, np.nan, cm.reads, cm.frac_nonzero)
+                estimate = CoPTRContigEstimate(
+                    cm.bam_file,
+                    cm.genome_id,
+                    cm.sample_id,
+                    np.nan,
+                    cm.reads,
+                    cm.frac_nonzero,
+                )
                 estimates.append(estimate)
                 parameters.append((np.nan, np.nan))
                 binned_counts.append([np.nan])
@@ -387,14 +406,23 @@ class CoPTRContig:
         A = np.array(A_filtered).T
 
         # filter out rows where too many bins are missing
-        keep_rows = np.sum(np.isnan(A), axis=1) < 0.025*A.shape[1]
-        A = A[keep_rows,:]
+        keep_rows = np.sum(np.isnan(A), axis=1) < 0.025 * A.shape[1]
+        A = A[keep_rows, :]
 
-        if keep_rows.sum() < 0.5*keep_rows.size:
-            for j,col in enumerate(A.T):
+        if keep_rows.sum() < 0.5 * keep_rows.size:
+            for j, col in enumerate(A.T):
                 reads = col[np.isfinite(col)].sum()
-                frac_nonzero = (col[np.isfinite(col)] > 0).sum() / col[np.isfinite(col)].size
-                estimate = CoPTRContigEstimate(bam_files[j], genome_ids[j], sample_ids[j], np.nan, reads, frac_nonzero)
+                frac_nonzero = (col[np.isfinite(col)] > 0).sum() / col[
+                    np.isfinite(col)
+                ].size
+                estimate = CoPTRContigEstimate(
+                    bam_files[j],
+                    genome_ids[j],
+                    sample_ids[j],
+                    np.nan,
+                    reads,
+                    frac_nonzero,
+                )
                 estimates.append(estimate)
                 parameters.append((np.nan, np.nan))
                 binned_counts.append([np.nan])
@@ -405,18 +433,18 @@ class CoPTRContig:
                 return estimates
 
         poisson_pca = PoissonPCA()
-        W,V = poisson_pca.pca(A,k=1)
+        W, V = poisson_pca.pca(A, k=1)
         sorted_idx = np.argsort(W.flatten())
-        A = A[sorted_idx,:]
+        A = A[sorted_idx, :]
 
-        for j,col in enumerate(A.T):
+        for j, col in enumerate(A.T):
             col = col[np.isfinite(col)]
             reads = col.sum()
-            lb = int(0.05*col.size)
-            ub = int(0.95*col.size)
+            lb = int(0.05 * col.size)
+            ub = int(0.95 * col.size)
             col = col[lb:ub]
 
-            m,b,log_lk,flip = self.estimate_ptr_maximum_likelihood(col)
+            m, b, log_lk, flip = self.estimate_ptr_maximum_likelihood(col)
             # m,b,res = self.estimate_slope_intercept(col)
             # flip = m < 0
 
@@ -424,7 +452,9 @@ class CoPTRContig:
             # so let's look at positive slopes only
             m = np.abs(m)
             frac_nonzero = (col > 0).sum() / col.size
-            estimate = CoPTRContigEstimate(bam_files[j], genome_ids[j], sample_ids[j], m, reads, frac_nonzero)
+            estimate = CoPTRContigEstimate(
+                bam_files[j], genome_ids[j], sample_ids[j], m, reads, frac_nonzero
+            )
             estimates.append(estimate)
 
             parameters.append((m, b))
@@ -433,7 +463,6 @@ class CoPTRContig:
             if flip:
                 bc = np.flip(bc)
             binned_counts.append(bc)
-
 
         print_info("CoPTRContig", "finished {}".format(genome_id))
 
@@ -448,13 +477,14 @@ class CoPTRContig:
         plot_folder = x[2]
 
         if plot_folder is not None:
-            estimates, parameters, reordered_bins = self.estimate_ptrs(coverage_maps, return_bins=True)
+            estimates, parameters, reordered_bins = self.estimate_ptrs(
+                coverage_maps, return_bins=True
+            )
             plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder)
         else:
             estimates = self.estimate_ptrs(coverage_maps)
 
         return (ref_genome, estimates)
-
 
 
 def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
@@ -463,16 +493,17 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
     coptr_contig = CoPTRContig(min_reads=5000, min_samples=5)
 
     # make sure esimates and coverage maps are in the same order
-    order = dict([ (est.sample_id, i) for i,est in enumerate(estimates)])
+    order = dict([(est.sample_id, i) for i, est in enumerate(estimates)])
     tmp = [[] for cm in coverage_maps]
     for cm in coverage_maps:
         idx = order[cm.sample_id]
         tmp[idx] = cm
     coverage_maps = tmp
 
-
     nplots = 0
-    for estimate,p,cm,rbins in zip(estimates, parameters, coverage_maps, reordered_bins):
+    for estimate, p, cm, rbins in zip(
+        estimates, parameters, coverage_maps, reordered_bins
+    ):
         if np.isnan(estimate.estimate):
             continue
 
@@ -481,7 +512,8 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
         binned_counts = []
         for cid in contig_ids:
             length = cm.get_length(cid)
-            if length < 11000: continue
+            if length < 11000:
+                continue
 
             binned_counts += cm.bin_reads(cid).tolist()
 
@@ -490,25 +522,37 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
 
         median = np.median(binned_counts[binned_counts != 0])
 
-        fig,ax = plt.subplots(nrows=2,ncols=1, figsize=(9,6))
+        fig, ax = plt.subplots(nrows=2, ncols=1, figsize=(9, 6))
 
         # plot unordered bins
         x1 = np.linspace(0, 1, binned_counts.size)
         ax[0].scatter(x1, binned_counts)
         ax[0].set_yscale("log", base=2)
-        ax[0].plot(x1, np.ones(binned_counts.size)*median, c="red", linewidth=3)
-        ax[0].plot(x1, np.ones(binned_counts.size)*upper_bound, c="red", linestyle=":", linewidth=3)
-        ax[0].plot(x1, np.ones(binned_counts.size)*lower_bound, c="red", linestyle=":", linewidth=3)
+        ax[0].plot(x1, np.ones(binned_counts.size) * median, c="red", linewidth=3)
+        ax[0].plot(
+            x1,
+            np.ones(binned_counts.size) * upper_bound,
+            c="red",
+            linestyle=":",
+            linewidth=3,
+        )
+        ax[0].plot(
+            x1,
+            np.ones(binned_counts.size) * lower_bound,
+            c="red",
+            linestyle=":",
+            linewidth=3,
+        )
         y_lim = ax[0].get_ylim()
         ax[0].set_ylabel("Read Count")
         ax[0].set_xlabel("Unordered Bins")
 
         # plot model fit
         emp_probs = rbins / rbins.sum()
-        m,b = p # slope intercept in log space
+        m, b = p  # slope intercept in log space
 
         x2 = np.linspace(0, 1, emp_probs.size)
-        y = np.array([m*xi + b for xi in x2])
+        y = np.array([m * xi + b for xi in x2])
         y = np.power(2, y)
         y /= y.sum()
         ax[1].scatter(x2, emp_probs, c="C1")
@@ -516,13 +560,18 @@ def plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder):
         ax[1].set_yscale("log", base=2)
         ax[1].set_ylabel("Density")
         ax[1].set_xlabel("Reordered Bins")
-        ax[1].set_title("\nlog2(PTR)={:.3f} (Reads = {})".format(m, int(estimate.nreads)))
+        ax[1].set_title(
+            "\nlog2(PTR)={:.3f} (Reads = {})".format(m, int(estimate.nreads))
+        )
 
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_folder, estimate.sample_id + "-" + estimate.genome_id + ".pdf"))
+        plt.savefig(
+            os.path.join(
+                plot_folder, estimate.sample_id + "-" + estimate.genome_id + ".pdf"
+            )
+        )
         plt.close()
         nplots += 1
-
 
 
 def load_coverage_maps(file_handle, ref_id):
@@ -539,8 +588,14 @@ def load_coverage_maps(file_handle, ref_id):
     return coverage_maps
 
 
-
-def estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder, min_reads, min_samples, threads, plot_folder=None):
+def estimate_ptrs_coptr_contig(
+    assembly_genome_ids,
+    grouped_coverage_map_folder,
+    min_reads,
+    min_samples,
+    threads,
+    plot_folder=None,
+):
     """Estimate Peak-to-Trough ratios across samples.
 
     Parameters
@@ -570,12 +625,18 @@ def estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder,
 
     if threads == 1:
         for ref_id in sorted(assembly_genome_ids):
-            with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
+            with open(
+                os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb"
+            ) as f:
                 coverage_maps = load_coverage_maps(f, ref_id)
 
             if plot_folder is not None:
-                estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(coverage_maps, return_bins=True)
-                plot_fit(estimates, parameters, coverage_maps, reordered_bins, plot_folder)
+                estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(
+                    coverage_maps, return_bins=True
+                )
+                plot_fit(
+                    estimates, parameters, coverage_maps, reordered_bins, plot_folder
+                )
             else:
                 estimates = coptr_contig.estimate_ptrs(coverage_maps)
 
@@ -586,13 +647,20 @@ def estimate_ptrs_coptr_contig(assembly_genome_ids, grouped_coverage_map_folder,
         pool = mp.Pool(threads)
         coverage_maps = {}
 
-        for i,ref_id in enumerate(sorted(assembly_genome_ids)):
-            with open(os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb") as f:
+        for i, ref_id in enumerate(sorted(assembly_genome_ids)):
+            with open(
+                os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb"
+            ) as f:
                 coverage_maps[ref_id] = load_coverage_maps(f, ref_id)
 
             if (i % threads == 0 and i > 0) or i == len(assembly_genome_ids) - 1:
-                flat_coverage_maps = [(ref_id, coverage_maps[ref_id], plot_folder) for ref_id in coverage_maps]
-                flat_results = pool.map(coptr_contig._parallel_helper, flat_coverage_maps)
+                flat_coverage_maps = [
+                    (ref_id, coverage_maps[ref_id], plot_folder)
+                    for ref_id in coverage_maps
+                ]
+                flat_results = pool.map(
+                    coptr_contig._parallel_helper, flat_coverage_maps
+                )
                 coptr_contig_estimates.update(dict(flat_results))
 
                 coverage_maps = {}

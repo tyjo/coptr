@@ -23,6 +23,7 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 
 import os.path
 
+
 def get_fastq_name(fpath):
     """Remove the path and extension from a fastq file.
 
@@ -35,7 +36,7 @@ def get_fastq_name(fpath):
         fname : str
             the name of the file with its path and extension removeed
     """
-    bn,ex = os.path.splitext(fpath)
+    bn, ex = os.path.splitext(fpath)
     if ex == ".gz":
-        bn,ex = os.path.splitext(bn)
+        bn, ex = os.path.splitext(bn)
     return bn

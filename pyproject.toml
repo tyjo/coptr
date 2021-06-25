@@ -1,0 +1,17 @@
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = [
+  'setuptools>=40.6.0',
+  'wheel'
+]
+
+[tool.black]
+line-length = 88
+python-version = ['py37']
+
+[tool.isort]
+profile = 'black'
+skip = ['__init__.py']
+lines_after_imports = 2
+known_first_party = 'coptr'
+known_third_party = ['numpy', 'pysam', 'scipy']

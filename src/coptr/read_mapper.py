@@ -22,21 +22,20 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import numpy as np
 import os
 import os.path
-import pysam
 import subprocess as sub
 import sys
 import time
 
-from src.print import print_error, print_info
-from src.util import get_fastq_name
+import pysam
+
+from .print import print_error, print_info
+from .util import get_fastq_name
 
 
 class ReadMapper:
-    """Wrapper around bowtie2.
-    """
+    """Wrapper around bowtie2."""
 
     def index(self, ref_fasta, index_out, bt2_bmax, bt2_dcv, bt2_threads, bt2_packed):
         """Build a bowtie2 index from ref_fasta.
@@ -69,8 +68,8 @@ class ReadMapper:
             files_found = 0
             total_size = 0
             for f in os.listdir(ref_fasta):
-                fname,ext = os.path.splitext(f)
-                fpath = os.path.join(ref_fasta,f)
+                fname, ext = os.path.splitext(f)
+                fpath = os.path.join(ref_fasta, f)
 
                 if os.path.isfile(fpath) and ext in valid_ext:
                     ref_files.append(fpath)
@@ -80,14 +79,23 @@ class ReadMapper:
         else:
             print_error("ReadMapper", "index must either be file or folder.")
 
-
-        print_info("ReadMapper", "found {} files totaling {:.3f} Gb".format(len(ref_files), total_size / (1024**3)))
+        print_info(
+            "ReadMapper",
+            "found {} files totaling {:.3f} Gb".format(
+                len(ref_files), total_size / (1024 ** 3)
+            ),
+        )
 
         fna_out = open("coptr-fna-{}.fna".format(time.time()), "w")
         genomes_out = open("{}.genomes".format(index_out), "w")
         n_genomes = 0
 
-        print_info("ReadMapper", "copying to fasta files to {} with prepended genome ids (filenames)".format(fna_out.name))
+        print_info(
+            "ReadMapper",
+            "copying to fasta files to {} with prepended genome ids (filenames)".format(
+                fna_out.name
+            ),
+        )
 
         # assume 1 genome per fasta
         # let's set the filename as the genome identifier
@@ -106,7 +114,10 @@ class ReadMapper:
         fna_out.close()
         genomes_out.close()
 
-        print_info("ReadMapper", "writing {} reference genome ids to {}".format(n_genomes, genomes_out.name))
+        print_info(
+            "ReadMapper",
+            "writing {} reference genome ids to {}".format(n_genomes, genomes_out.name),
+        )
         call = ["bowtie2-build", fna_out.name, index_out, "--threads", bt2_threads]
         if bt2_bmax is not None:
             call += ["--bmax", bt2_bmax]
@@ -118,13 +129,15 @@ class ReadMapper:
         try:
             print_info("ReadMapper", " ".join(call))
             sub.check_call(call)
-            print_info("ReadMapper", "indexed {} fasta files for reference database.".format(files_found))
+            print_info(
+                "ReadMapper",
+                "indexed {} fasta files for reference database.".format(files_found),
+            )
         except Exception as e:
             print(e, file=sys.stderr)
         finally:
             print_info("ReadMapper", "cleaning up {}".format(fna_out.name))
             sub.check_call(["rm", fna_out.name])
-
 
     def map(self, index, inputf, outfolder, paired, threads, bt2_k):
         """Map reads from infile against reference database using bowtie2, then
@@ -152,13 +165,23 @@ class ReadMapper:
 
         if os.path.isfile(inputf):
             bn = os.path.basename(inputf)
-            bn,ext = os.path.splitext(bn)
+            bn, ext = os.path.splitext(bn)
             out_sam = os.path.join(outfolder, bn + ".sam")
             out_bam = os.path.join(outfolder, bn + ".bam")
 
             # first map to a sam file with bowtie2
             print_info("ReadMapper", "mapping {} to {}".format(inputf, out_sam))
-            call = ["bowtie2", "-x", index, inputf, "--no-unal", "-p", str(threads), "-k", bt2_k]
+            call = [
+                "bowtie2",
+                "-x",
+                index,
+                inputf,
+                "--no-unal",
+                "-p",
+                str(threads),
+                "-k",
+                bt2_k,
+            ]
             print_info("ReadMapper", " ".join(call))
             with open(out_sam, "w") as out:
                 sub.check_call(call, stdout=out)
@@ -182,28 +205,40 @@ class ReadMapper:
             valid_ext = [".fastq", ".fq", ".gz"]
             files_found = 0
             for f in sorted(os.listdir(inputf)):
-                fname,ext1 = os.path.splitext(f)
+                fname, ext1 = os.path.splitext(f)
                 if ext1 == ".gz":
                     ext2 = fname.split(".")[1]
                 else:
                     ext2 = ""
 
-                fpath = os.path.join(inputf,f)
+                fpath = os.path.join(inputf, f)
                 if ext1 in valid_ext or ext2 in valid_ext:
                     bn = os.path.basename(f)
-                    bn,ext = os.path.splitext(bn)
+                    bn, ext = os.path.splitext(bn)
                     out_sam = os.path.join(outfolder, get_fastq_name(bn) + ".sam")
                     out_bam = os.path.join(outfolder, get_fastq_name(bn) + ".bam")
 
                     # map reads with bowtie2
                     print_info("ReadMapper", "mapping {} to {}".format(fpath, out_sam))
-                    call = ["bowtie2", "-x", index, fpath, "--no-unal", "-p", str(threads), "-k", bt2_k]
+                    call = [
+                        "bowtie2",
+                        "-x",
+                        index,
+                        fpath,
+                        "--no-unal",
+                        "-p",
+                        str(threads),
+                        "-k",
+                        bt2_k,
+                    ]
                     print_info("ReadMapper", " ".join(call))
                     with open(out_sam, "w") as out:
                         sub.check_call(call, stdout=out)
 
                     # then convert to a bam file
-                    print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
+                    print_info(
+                        "ReadMapper", "converting {} to {}".format(out_sam, out_bam)
+                    )
                     infile = pysam.AlignmentFile(out_sam, "r")
                     outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
                     for s in infile:
@@ -215,7 +250,7 @@ class ReadMapper:
                     print_info("ReadMapper", "cleaning up {}".format(out_sam))
                     call = ["rm", out_sam]
                     sub.check_call(call)
-        
+
         # paired end sequencing
         elif os.path.isdir(inputf) and paired:
             valid_ext = [".fastq", "fq", ".gz"]
@@ -223,7 +258,7 @@ class ReadMapper:
             # file prefix -> [pair_1, pair_2]
             read_pairs = {}
             for f in sorted(os.listdir(inputf)):
-                fname,ext1 = os.path.splitext(f)
+                fname, ext1 = os.path.splitext(f)
                 if ext1 == ".gz":
                     ext2 = fname.split(".")[1]
                 else:
@@ -253,7 +288,20 @@ class ReadMapper:
 
                 # map reads with bowtie2
                 print_info("ReadMapper", "mapping {},{} to {}".format(f1, f2, out_sam))
-                call = ["bowtie2", "-x", index, "-1", f1, "-2", f2, "--no-unal", "-p", str(threads), "-k", bt2_k]
+                call = [
+                    "bowtie2",
+                    "-x",
+                    index,
+                    "-1",
+                    f1,
+                    "-2",
+                    f2,
+                    "--no-unal",
+                    "-p",
+                    str(threads),
+                    "-k",
+                    bt2_k,
+                ]
                 print_info("ReadMapper", " ".join(call))
                 with open(out_sam, "w") as out:
                     sub.check_call(call, stdout=out)

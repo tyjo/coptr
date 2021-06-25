@@ -21,13 +21,14 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import numpy as np
 import os
 import pickle as pkl
 
-from src.coptr_contig import CoPTRContig
-from src.coptr_ref import ReadFilterRef
-from src.print import print_info, print_warning
+import numpy as np
+
+from .coptr_contig import CoPTRContig
+from .coptr_ref import ReadFilterRef
+from .print import print_info
 
 
 def compute_read_counts_from_coverage_maps(coverage_maps, min_cov, min_samples):
@@ -46,14 +47,20 @@ def compute_read_counts_from_coverage_maps(coverage_maps, min_cov, min_samples):
         if cm.is_assembly and cm.passed_qc():
             binned_reads = coptr_contig.construct_coverage_matrix([cm])
 
-            lower_bound, upper_bound = coptr_contig.compute_genomewide_bounds(binned_reads)
-            count = binned_reads[np.logical_and(binned_reads >= lower_bound, binned_reads <= upper_bound)].sum()
+            lower_bound, upper_bound = coptr_contig.compute_genomewide_bounds(
+                binned_reads
+            )
+            count = binned_reads[
+                np.logical_and(binned_reads >= lower_bound, binned_reads <= upper_bound)
+            ].sum()
             read_counts[cm.genome_id] = count
             total_passing_reads += count
             genome_ids.add(cm.genome_id)
 
         elif not cm.is_assembly:
-            filtered_reads, filtered_length, qc_result = rf_ref.filter_reads(cm.read_positions, cm.length)
+            filtered_reads, filtered_length, qc_result = rf_ref.filter_reads(
+                cm.read_positions, cm.length
+            )
 
             if qc_result.passed_qc:
                 count = filtered_reads.size
@@ -64,15 +71,14 @@ def compute_read_counts_from_coverage_maps(coverage_maps, min_cov, min_samples):
     return sample_id, read_counts, genome_ids
 
 
-
-
 def compute_read_counts(coverage_map_folder, min_cov, min_samples):
 
     read_counts = {}
     genome_ids = set()
     for f in sorted(os.listdir(coverage_map_folder)):
         fname, ext = os.path.splitext(f)
-        if ext != ".pkl": continue
+        if ext != ".pkl":
+            continue
         fpath = os.path.join(coverage_map_folder, f)
 
         print_info("Count", "\tprocessing {}".format(f))
@@ -80,7 +86,13 @@ def compute_read_counts(coverage_map_folder, min_cov, min_samples):
         with open(fpath, "rb") as file:
             coverage_maps = pkl.load(file)
 
-            sample_id, sample_read_counts, sample_genome_ids = compute_read_counts_from_coverage_maps(coverage_maps, min_cov, min_samples)
+            (
+                sample_id,
+                sample_read_counts,
+                sample_genome_ids,
+            ) = compute_read_counts_from_coverage_maps(
+                coverage_maps, min_cov, min_samples
+            )
 
             if sample_id is not None:
                 read_counts[sample_id] = sample_read_counts
