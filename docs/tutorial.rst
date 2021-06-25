@@ -166,7 +166,8 @@ The input can either be a single fastq file, or a folder of fastq files to map.
 It also takes an optional ``--threads`` argument that allows bowtie2 to use
 multiple threads. Reads are output as ``bam`` files to save space.
 
-For paired end sequencing, it is recommend to only map reads from a single mate-pair.
+For paired-end sequencing, we recommand mapping reads from end only (e.g. the files
+ending in either _1.* or _2.*).
 
 
 Merging mapped reads from multiple indexes
