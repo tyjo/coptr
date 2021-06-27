@@ -16,6 +16,7 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import argparse
+import logging
 import os
 import os.path
 import pickle as pkl
@@ -29,9 +30,11 @@ from .compute_read_counts import compute_read_counts
 from .compute_rel_abun import compute_rel_abun
 from .coptr_contig import estimate_ptrs_coptr_contig
 from .coptr_ref import estimate_ptrs_coptr_ref
-from .print import print_error, print_info
 from .read_mapper import ReadMapper
 from .util import get_fastq_name
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProgramOptions:
@@ -55,15 +58,15 @@ command: index            create a bowtie2 index for a reference database
 
         if len(sys.argv[1:]) < 1:
             parser.print_help()
-            exit(1)
+            sys.exit(2)
 
         parser.add_argument("command", type=str, help="Command to run.")
         args = parser.parse_args(sys.argv[1:2])
 
         if not hasattr(self, args.command):
-            print_error("Main", "Unrecognized command.", quit=False)
+            logger.critical("Unrecognized command.")
             parser.print_help()
-            exit(1)
+            sys.exit(2)
         getattr(self, args.command)()
 
     def index(self):
@@ -100,7 +103,7 @@ command: index            create a bowtie2 index for a reference database
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
-            exit(1)
+            sys.exit(2)
 
         args = parser.parse_args(sys.argv[2:])
         read_mapper = ReadMapper()
@@ -147,7 +150,7 @@ command: index            create a bowtie2 index for a reference database
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
-            exit(1)
+            sys.exit(2)
 
         args = parser.parse_args(sys.argv[2:])
         read_mapper = ReadMapper()
@@ -174,7 +177,7 @@ command: index            create a bowtie2 index for a reference database
 
         if len(sys.argv[2:]) < 2:
             parser.print_help()
-            exit(1)
+            sys.exit(2)
 
         args = vars(parser.parse_args(sys.argv[2:]))
         in_bams = args["in-bams"]
@@ -208,7 +211,7 @@ command: index            create a bowtie2 index for a reference database
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
-            exit(1)
+            sys.exit(2)
 
         args = parser.parse_args(sys.argv[2:])
 
@@ -226,10 +229,7 @@ command: index            create a bowtie2 index for a reference database
                 if os.path.isfile(
                     os.path.join(args.out_folder, get_fastq_name(f) + ".cm.pkl")
                 ):
-                    print_info(
-                        "BamProcessor",
-                        "output for {} already found, skipping".format(fname),
-                    )
+                    logger.info("Output for '%s' already found, skipping.", fname)
                     continue
 
                 # don't process the rest of the bam file if we just want to
@@ -243,16 +243,15 @@ command: index            create a bowtie2 index for a reference database
                 ) as f:
                     pkl.dump(coverage_maps, f)
 
-        print_info(
-            "BamProcessor",
-            "found {} reference sequences corresponding to {} genomes".format(
-                len(ref_sequences), len(ref_genomes)
-            ),
+        logger.info(
+            "Found %d reference sequences corresponding to %d genomes.",
+            len(ref_sequences),
+            len(ref_genomes),
         )
         if args.check_regex:
-            print_info("BamProcessor", "reference genome ids:")
+            logger.info("Reference genome ids:")
             for ref in sorted(ref_genomes):
-                print("\t", ref, file=sys.stderr)
+                logger.info("\t%s", ref)
 
     def estimate(self):
         parser = argparse.ArgumentParser(
@@ -300,7 +299,7 @@ command: index            create a bowtie2 index for a reference database
 
         if len(sys.argv[2:]) < 1:
             parser.print_help()
-            exit(1)
+            sys.exit(2)
 
         args = parser.parse_args(sys.argv[2:])
         sample_ids = set()
@@ -314,15 +313,13 @@ command: index            create a bowtie2 index for a reference database
             os.mkdir(grouped_coverage_map_folder)
 
         if args.restart:
-            print_info(
-                "CoPTR", "restarting from files in " + grouped_coverage_map_folder
-            )
+            logger.info("Restarting from files in '%s'.", grouped_coverage_map_folder)
             for cm_file in sorted(os.listdir(grouped_coverage_map_folder)):
                 _, ext = os.path.splitext(cm_file)
                 if ext != ".pkl":
                     continue
 
-                print_info("CoPTR", "checking " + cm_file)
+                logger.info("Checking '%s'.", cm_file)
                 with open(
                     os.path.join(grouped_coverage_map_folder, cm_file), "rb"
                 ) as f:
@@ -339,8 +336,8 @@ command: index            create a bowtie2 index for a reference database
                         pass
 
         else:
-            print_info("CoPTR", "grouping reads by reference genome")
-            print_info("CoPTR", "saving to " + grouped_coverage_map_folder)
+            logger.info("Grouping reads by reference genome.")
+            logger.info("Saving to '%s':", grouped_coverage_map_folder)
 
             # first construct a list of genome_ids for ptr estimates
             for f in sorted(os.listdir(args.coverage_map_folder)):
@@ -349,8 +346,7 @@ command: index            create a bowtie2 index for a reference database
                     continue
                 fpath = os.path.join(args.coverage_map_folder, f)
 
-                print_info("CoPTR", "\tprocessing {}".format(f))
-
+                logger.info("\t%s", f)
                 with open(fpath, "rb") as file:
                     coverage_maps = pkl.load(file)
 
@@ -382,8 +378,8 @@ command: index            create a bowtie2 index for a reference database
                             ref_genome_ids.add(ref_id)
 
                     del coverage_maps
-            print_info("CoPTR", "done grouping by reference genome")
-            print_info("CoPTR", "the --restart flag can be used to start from here")
+            logger.info("Grouping by reference genome: Complete.")
+            logger.info("The --restart flag can be used to start from here.")
 
         sample_ids = sorted(list(sample_ids))
         results_ref = estimate_ptrs_coptr_ref(
@@ -408,7 +404,7 @@ command: index            create a bowtie2 index for a reference database
         if ext != ".csv":
             out_file += ".csv"
 
-        print_info("CoPTR", "writing {}".format(out_file))
+        logger.info("Writing '%s'.", out_file)
 
         with open(out_file, "w") as f:
             # write the header
@@ -443,15 +439,8 @@ command: index            create a bowtie2 index for a reference database
                         row[sample_ids.index(result.sample_id)] = str(result.estimate)
                 f.write(",".join(row) + "\n")
 
-        print_info("CoPTR", "done!")
-        print_info(
-            "CoPTR", "you may remove the folder {}".format(grouped_coverage_map_folder)
-        )
-        # print_info("CoPTR", "cleaning up {}".format(grouped_coverage_map_folder))
-        # for ref_id in ref_genome_ids.union(assembly_genome_ids):
-        #     filename = os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl")
-        #     os.remove(filename)
-        # os.rmdir(grouped_coverage_map_folder)
+        logger.info("Done.")
+        logger.info("You may now remove the folder '%s'.", grouped_coverage_map_folder)
 
     def count(self):
         parser = argparse.ArgumentParser(
@@ -482,7 +471,7 @@ command: index            create a bowtie2 index for a reference database
 
         args = parser.parse_args(sys.argv[2:])
 
-        print_info("CoPTR", "computing read counts")
+        logger.info("Computing read counts.")
 
         counts, genome_ids = compute_read_counts(
             args.coverage_map_folder, args.min_cov, args.min_samples
@@ -493,7 +482,7 @@ command: index            create a bowtie2 index for a reference database
         if ext != ".csv":
             out_file += ".csv"
 
-        print_info("CoPTR", "writing {}".format(out_file))
+        logger.info("Writing '%s'.", out_file)
 
         with open(out_file, "w") as f:
             # write the header
@@ -512,7 +501,7 @@ command: index            create a bowtie2 index for a reference database
                 row = ",".join(row) + "\n"
                 f.write(row)
 
-        print_info("CoPTR", "done!")
+        logger.info("Done.")
 
     def rabun(self):
         parser = argparse.ArgumentParser(
@@ -549,7 +538,7 @@ command: index            create a bowtie2 index for a reference database
 
         args = parser.parse_args(sys.argv[2:])
 
-        print_info("CoPTR", "computing relative abundances")
+        logger.info("Computing relative abundances.")
 
         rel_abun, genome_ids = compute_rel_abun(
             args.coverage_map_folder, args.min_reads, args.min_cov, args.min_samples
@@ -560,7 +549,7 @@ command: index            create a bowtie2 index for a reference database
         if ext != ".csv":
             out_file += ".csv"
 
-        print_info("CoPTR", "writing {}".format(out_file))
+        logger.info("Writing '%s'.", out_file)
 
         with open(out_file, "w") as f:
             # write the header
@@ -579,9 +568,10 @@ command: index            create a bowtie2 index for a reference database
                 row = ",".join(row) + "\n"
                 f.write(row)
 
-        print_info("CoPTR", "done!")
+        logger.info("Done.")
 
 
 def cli():
     """Serve as an entry point for command line calls."""
+    logging.basicConfig(level="INFO", format="[%(levelname)s] [%(name)s] %(message)s")
     ProgramOptions()
