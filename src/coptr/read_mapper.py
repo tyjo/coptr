@@ -26,7 +26,8 @@ import os
 import os.path
 import subprocess as sub
 import sys
-import time
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pysam
 
@@ -56,20 +57,20 @@ class ReadMapper:
             bt2_packed : str
                 Parameter to pass to bowtie2-build --packed argument.
         """
+        files_found = 0
+        total_size = 0
+        ref_files = []
         if os.path.isfile(ref_fasta):
-            ref_files = [ref_fasta]
-            files_found = 1
-            total_size = os.stat(ref_fasta).st_size
+            ref_files.append(ref_fasta)
+            files_found += 1
+            total_size += os.stat(ref_fasta).st_size
         elif os.path.isdir(ref_fasta):
             valid_ext = [".fasta", ".fa", ".fna"]
             # for multiple fasta files, bowtie2 takes a comma
             # separated list
-            ref_files = []
-            files_found = 0
-            total_size = 0
-            for f in os.listdir(ref_fasta):
-                fname, ext = os.path.splitext(f)
-                fpath = os.path.join(ref_fasta, f)
+            for in_handle in os.listdir(ref_fasta):
+                fname, ext = os.path.splitext(in_handle)
+                fpath = os.path.join(ref_fasta, in_handle)
 
                 if os.path.isfile(fpath) and ext in valid_ext:
                     ref_files.append(fpath)
@@ -86,39 +87,47 @@ class ReadMapper:
             ),
         )
 
-        fna_out = open("coptr-fna-{}.fna".format(time.time()), "w")
-        genomes_out = open("{}.genomes".format(index_out), "w")
-        n_genomes = 0
+        sequence_collection = Path(
+            f"coptr-fna-{datetime.now(timezone.utc).isoformat(timespec='seconds')}.fna"
+        )
+        genomes = Path(f"{index_out}.genomes")
 
         print_info(
             "ReadMapper",
             "copying to fasta files to {} with prepended genome ids (filenames)".format(
-                fna_out.name
+                str(sequence_collection)
             ),
         )
 
         # assume 1 genome per fasta
         # let's set the filename as the genome identifier
-        for fpath in ref_files:
-            fname = os.path.basename(os.path.splitext(fpath)[0])
-            genomes_out.write(os.path.basename(fname) + "\n")
-            n_genomes += 1
+        n_genomes = 0
+        with sequence_collection.open("w") as out_handle, genomes.open(
+            "w"
+        ) as genomes_handle:
+            for fpath in ref_files:
+                fname = os.path.basename(os.path.splitext(fpath)[0])
+                genomes_handle.write(os.path.basename(fname) + "\n")
+                n_genomes += 1
 
-            with open(fpath, "r") as f:
-                for line in f:
-                    if ">" == line[0]:
-                        # prepend the filename as the identifier for the genome
-                        line = line[0] + fname + "|" + line[1:]
-                    fna_out.write(line)
-
-        fna_out.close()
-        genomes_out.close()
+                with open(fpath, "r") as in_handle:
+                    for line in in_handle:
+                        if line.startswith(">"):
+                            # prepend the filename as the identifier for the genome
+                            line = f">{fname}|{line[1:]}"
+                        out_handle.write(line)
 
         print_info(
             "ReadMapper",
-            "writing {} reference genome ids to {}".format(n_genomes, genomes_out.name),
+            "writing {} reference genome ids to {}".format(n_genomes, str(genomes)),
         )
-        call = ["bowtie2-build", fna_out.name, index_out, "--threads", bt2_threads]
+        call = [
+            "bowtie2-build",
+            str(sequence_collection),
+            index_out,
+            "--threads",
+            bt2_threads,
+        ]
         if bt2_bmax is not None:
             call += ["--bmax", bt2_bmax]
         if bt2_dcv is not None:
@@ -136,8 +145,8 @@ class ReadMapper:
         except Exception as e:
             print(e, file=sys.stderr)
         finally:
-            print_info("ReadMapper", "cleaning up {}".format(fna_out.name))
-            sub.check_call(["rm", fna_out.name])
+            print_info("ReadMapper", "cleaning up {}".format(str(sequence_collection)))
+            sequence_collection.unlink()
 
     def map(self, index, inputf, outfolder, paired, threads, bt2_k):
         """Map reads from infile against reference database using bowtie2, then
@@ -160,17 +169,18 @@ class ReadMapper:
         """
         bt2_k = str(bt2_k)
 
-        if not os.path.isdir(outfolder):
+        outfolder = Path(outfolder)
+        if not outfolder.is_dir():
             print_error("ReadMapper", "output folder does not exist.")
 
         if os.path.isfile(inputf):
             bn = os.path.basename(inputf)
             bn, ext = os.path.splitext(bn)
-            out_sam = os.path.join(outfolder, bn + ".sam")
-            out_bam = os.path.join(outfolder, bn + ".bam")
+            out_sam = outfolder / f"{bn}.sam"
+            out_bam = outfolder / f"{bn}.bam"
 
             # first map to a sam file with bowtie2
-            print_info("ReadMapper", "mapping {} to {}".format(inputf, out_sam))
+            print_info("ReadMapper", "mapping {} to {}".format(inputf, str(out_sam)))
             call = [
                 "bowtie2",
                 "-x",
@@ -183,22 +193,25 @@ class ReadMapper:
                 bt2_k,
             ]
             print_info("ReadMapper", " ".join(call))
-            with open(out_sam, "w") as out:
+            with out_sam.open("w") as out:
                 sub.check_call(call, stdout=out)
 
             # then convert to a bam file
-            print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
+            print_info(
+                "ReadMapper", "converting {} to {}".format(str(out_sam), str(out_bam))
+            )
             infile = pysam.AlignmentFile(out_sam, "r")
             outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
-            for s in infile:
-                outfile.write(s)
-            infile.close()
-            outfile.close()
+            try:
+                for s in infile:
+                    outfile.write(s)
+            finally:
+                infile.close()
+                outfile.close()
 
             # now remove sam file
-            print_info("ReadMapper", "cleaning up {}".format(out_sam))
-            call = ["rm", out_sam]
-            sub.check_call(call)
+            print_info("ReadMapper", "cleaning up {}".format(str(out_sam)))
+            out_sam.unlink()
 
         # single end sequencing
         elif os.path.isdir(inputf) and not paired:
@@ -215,11 +228,13 @@ class ReadMapper:
                 if ext1 in valid_ext or ext2 in valid_ext:
                     bn = os.path.basename(f)
                     bn, ext = os.path.splitext(bn)
-                    out_sam = os.path.join(outfolder, get_fastq_name(bn) + ".sam")
-                    out_bam = os.path.join(outfolder, get_fastq_name(bn) + ".bam")
+                    out_sam = outfolder / f"{get_fastq_name(bn)}.sam"
+                    out_bam = outfolder / f"{get_fastq_name(bn)}.bam"
 
                     # map reads with bowtie2
-                    print_info("ReadMapper", "mapping {} to {}".format(fpath, out_sam))
+                    print_info(
+                        "ReadMapper", "mapping {},{} to {}".format(f1, f2, str(out_sam))
+                    )
                     call = [
                         "bowtie2",
                         "-x",
@@ -232,24 +247,26 @@ class ReadMapper:
                         bt2_k,
                     ]
                     print_info("ReadMapper", " ".join(call))
-                    with open(out_sam, "w") as out:
+                    with out_sam.open("w") as out:
                         sub.check_call(call, stdout=out)
 
                     # then convert to a bam file
                     print_info(
-                        "ReadMapper", "converting {} to {}".format(out_sam, out_bam)
+                        "ReadMapper",
+                        "converting {} to {}".format(str(out_sam), str(out_bam)),
                     )
                     infile = pysam.AlignmentFile(out_sam, "r")
                     outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
-                    for s in infile:
-                        outfile.write(s)
-                    infile.close()
-                    outfile.close()
+                    try:
+                        for s in infile:
+                            outfile.write(s)
+                    finally:
+                        infile.close()
+                        outfile.close()
 
                     # now remove sam file
                     print_info("ReadMapper", "cleaning up {}".format(out_sam))
-                    call = ["rm", out_sam]
-                    sub.check_call(call)
+                    out_sam.unlink()
 
         # paired end sequencing
         elif os.path.isdir(inputf) and paired:
@@ -283,11 +300,13 @@ class ReadMapper:
                 f2 = os.path.join(inputf, read_pairs[pair_name][1])
                 bn = os.path.basename(f1)
                 bn = bn.split("_")[0]
-                out_sam = os.path.join(outfolder, get_fastq_name(bn) + ".sam")
-                out_bam = os.path.join(outfolder, get_fastq_name(bn) + ".bam")
+                out_sam = outfolder / f"{get_fastq_name(bn)}.sam"
+                out_bam = outfolder / f"{get_fastq_name(bn)}.bam"
 
                 # map reads with bowtie2
-                print_info("ReadMapper", "mapping {},{} to {}".format(f1, f2, out_sam))
+                print_info(
+                    "ReadMapper", "mapping {},{} to {}".format(f1, f2, str(out_sam))
+                )
                 call = [
                     "bowtie2",
                     "-x",
@@ -303,22 +322,26 @@ class ReadMapper:
                     bt2_k,
                 ]
                 print_info("ReadMapper", " ".join(call))
-                with open(out_sam, "w") as out:
+                with out_sam.open("w") as out:
                     sub.check_call(call, stdout=out)
 
                 # then convert to a bam file
-                print_info("ReadMapper", "converting {} to {}".format(out_sam, out_bam))
+                print_info(
+                    "ReadMapper",
+                    "converting {} to {}".format(str(out_sam), str(out_bam)),
+                )
                 infile = pysam.AlignmentFile(out_sam, "r")
                 outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
-                for s in infile:
-                    outfile.write(s)
-                infile.close()
-                outfile.close()
+                try:
+                    for s in infile:
+                        outfile.write(s)
+                finally:
+                    infile.close()
+                    outfile.close()
 
                 # now remove sam file
                 print_info("ReadMapper", "cleaning up {}".format(out_sam))
-                call = ["rm", out_sam]
-                sub.check_call(call)
+                out_sam.unlink()
 
         else:
             print_error("ReadMapper", "input must either be a file or folder.")
