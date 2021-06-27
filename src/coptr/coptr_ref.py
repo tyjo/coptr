@@ -3,6 +3,7 @@ coptr_ref.py
 ======================
 Estimate peak-to-trough ratios using complete reference genomes.
 """
+import sys
 
 """
 This file is part of CoPTR.
@@ -21,6 +22,7 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import logging
 import math
 import multiprocessing as mp
 import os.path
@@ -30,7 +32,8 @@ import numpy as np
 import scipy.optimize
 import scipy.stats
 
-from .print import print_error, print_info, print_warning
+
+logger = logging.getLogger(__name__)
 
 
 class QCResult:
@@ -155,13 +158,10 @@ class ReadFilterRef:
         bin_size = bin_size - (bin_size % 100)
 
         if bin_size < 1:
-            print_error(
-                "CoPTR-Ref",
-                "{}\n{}\n{}".format(
-                    "found complete reference genome with <500bp",
-                    "this is probably a mislabeled contig",
-                    "please check your .genomes file",
-                ),
+            logger.error(
+                "Found complete reference genome with <500bp. "
+                "This is probably due to a mislabeled contig. "
+                "Please check your .genomes file."
             )
 
         return bin_size
@@ -750,7 +750,7 @@ class CoPTRRef:
 
         np.seterr(invalid="warn")
         if best_f == np.inf:
-            print_warning("CoPTRRef", "PTR optimization failed")
+            logger.error("PTR optimization failed.")
             return np.nan, np.nan, np.nan, np.nan
         elif not filter_reads:
             return log2_ptr, ori, ter, -best_f
@@ -869,7 +869,7 @@ class CoPTRRef:
         if len(sample_ids) == 0:
             return estimates
 
-        print_info("CoPTRRef", "running {}".format(genome_id))
+        logger.info("Running %s.", genome_id)
 
         # first, compute individiual log2_ptr, ori, ter estimates
         log2_ptrs = []
@@ -901,7 +901,7 @@ class CoPTRRef:
                     estimates[i].estimate = log2_ptrs[n]
                 n += 1
 
-        print_info("CoPTRRef", "finished {}".format(genome_id))
+        logger.info("Finished %s.", genome_id)
 
         return estimates
 
@@ -915,7 +915,11 @@ class CoPTRRef:
 def plot_fit(
     coptr_ref_est, read_positions, genome_length, min_reads, min_cov, plot_folder
 ):
-    import matplotlib.pyplot as plt
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError:
+        logger.critical("Please install matplotlib to enable plotting.")
+        raise
 
     coptr = CoPTRRef(min_reads, min_cov)
     rf = ReadFilterRef(min_reads, min_cov)
@@ -1044,7 +1048,7 @@ def estimate_ptrs_coptr_ref(
             A dictionary with key reference genome id and value
             a list of CoPTRRefEstimate for that reference genome.
     """
-    print_info("CoPTRRef", "checking reference genomes")
+    logger.info("Checking reference genomes.")
     coptr_ref_estimates = {}
     coptr_ref = CoPTRRef(min_reads, min_cov)
 
