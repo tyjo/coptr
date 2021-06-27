@@ -23,6 +23,7 @@ import sys
 
 import numpy as np
 
+from . import __version__
 from .bam_processor import BamProcessor
 from .compute_read_counts import compute_read_counts
 from .compute_rel_abun import compute_rel_abun
@@ -31,8 +32,6 @@ from .coptr_ref import estimate_ptrs_coptr_ref
 from .print import print_error, print_info
 from .read_mapper import ReadMapper
 from .util import get_fastq_name
-
-from .__init__ import __version__
 
 
 class ProgramOptions:
