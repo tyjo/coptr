@@ -22,12 +22,17 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import logging
+
 import numpy as np
 import scipy.misc
 import scipy.special
 import scipy.stats
 from scipy.sparse import csr_matrix
 from scipy.special import digamma
+
+
+logger = logging.getLogger(__name__)
 
 
 class ReadAssigner(object):
@@ -89,15 +94,14 @@ class ReadAssigner(object):
         """Optimize eta with fixed phi."""
         self.eta = np.array(self.alpha + self.phi.sum(axis=0))[0]
 
-    def run_vi(self, tol=1e-3, verbose=False):
+    def run_vi(self, tol=1e-3):
         """Optimize variational parameters with respect to elbo."""
         prv_elbo = -np.inf
         elbo = self.compute_elbo()
 
         it = 0
         while np.abs(prv_elbo - elbo) > tol:
-            if verbose:
-                print("it:", it, "elbo:", elbo)
+            logger.debug("Iteration: %d; elbo: %.3G", it, elbo)
             self.update_eta()
             self.update_phi()
             prv_elbo = elbo
@@ -108,8 +112,7 @@ class ReadAssigner(object):
                 elbo >= prv_elbo - 1e-3
             ), "elbo must be strictly increasing ({} > {})".format(elbo, prv_elbo)
 
-        if verbose:
-            print("it:", it, "elbo:", elbo)
+        logger.debug("Iteration: %d; elbo: %.3G", it, elbo)
 
     def assign_reads(self, verbose=False):
         """Compute read assignments.
