@@ -21,16 +21,19 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import sys
+import logging
 
 import numpy as np
 import scipy.optimize
 
 
+logger = logging.getLogger(__name__)
+
+
 class PoissonPCA:
     """Principal Component Analysis with Poisson observations."""
 
-    def pca(self, X, k, tol=1e-3, verbose=False):
+    def pca(self, X, k, tol=1e-3):
         """Run the PCA. For a data matrix X (sample by observations), finds two matrices W and V
         such that:
 
@@ -65,18 +68,13 @@ class PoissonPCA:
         vh = vh[:k, :]
         W = u * s
         V = vh
-        # W = np.random.normal(loc=0, scale=0.1, size=(X.shape[0], k))
-        # V = np.random.normal(loc=0, scale=0.1, size=(k, X.shape[1]))
-        # W = np.zeros((X.shape[0], k))
-        # V = np.zeros((k, X.shape[1]))
 
         it = 0
         prv_log_lk = -np.inf
         log_lk = self.log_likelihood(X, W, V)
         while np.abs(prv_log_lk - log_lk) > tol:
 
-            if verbose:
-                print("iteration:", it, "log likelihood:", log_lk, file=sys.stderr)
+            logger.debug("Iteration: %d; Log likelihood: %.3G", it, log_lk)
 
             prv_log_lk = log_lk
             W = self.update_W(X, W, V)
