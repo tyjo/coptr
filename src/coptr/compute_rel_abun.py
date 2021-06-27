@@ -22,13 +22,16 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import os
+import logging
 import pickle as pkl
 
 import numpy as np
 
 from .coptr_contig import CoPTRContig
 from .coptr_ref import ReadFilterRef
-from .print import print_info
+
+
+logger = logging.getLogger(__name__)
 
 
 def compute_rel_abun_from_coverage_maps(coverage_maps, min_reads, min_cov, min_samples):
@@ -96,7 +99,7 @@ def compute_rel_abun(coverage_map_folder, min_reads, min_cov, min_samples):
             continue
         fpath = os.path.join(coverage_map_folder, f)
 
-        print_info("RAbun", "\tprocessing {}".format(f))
+        logger.info("\t%s", f)
 
         with open(fpath, "rb") as file:
             coverage_maps = pkl.load(file)
