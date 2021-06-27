@@ -24,6 +24,7 @@ along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 
 import array
 import bisect
+import logging
 import math
 import os.path
 import re
@@ -32,8 +33,10 @@ import numpy as np
 import pysam
 from scipy.sparse import csr_matrix
 
-from .print import print_info
 from .read_assigner import ReadAssigner
+
+
+logger = logging.getLogger(__name__)
 
 
 class ReadContainer:
@@ -370,7 +373,7 @@ class BamProcessor:
                 A dictionary whose key is a sequence id, and
                 value are the read positions along that sequence.
         """
-        print_info("BamProcessor", "determining reference genomes")
+        logger.info("Determining reference genomes.")
         genome_ids = set()
 
         # sequence_id -> genome_id
@@ -389,7 +392,7 @@ class BamProcessor:
             genome_ids, read_container, lengths, ref_seq_genome_id
         )
 
-        print_info("BamProcessor", "collecting multi-mapped reads")
+        logger.info("Collecting multi-mapped reads.")
         genome_ids = sorted(list(genome_ids))
         # reads that fail filtering criteria
         discarded_reads = set()
@@ -433,7 +436,7 @@ class BamProcessor:
         if len(data) > 0:
             X = csr_matrix((data, indices, indptr), shape=(nreads, len(genome_ids)))
 
-            print_info("BamProcessor", "assigning multi-mapped reads")
+            logger.info("Assigning multi-mapped reads.")
             read_assigner = ReadAssigner(X, prior_counts)
             assignments = read_assigner.assign_reads()
 
@@ -498,7 +501,7 @@ class BamProcessor:
                 A dictionary whose key is a reference genome id,
                 and value is a CoverageMap.
         """
-        print_info("BamProcessor", "processing {}".format(bam_file))
+        logger.info("Processing '%s'.", bam_file)
 
         # extract read positions
         # reads : dict[query_seq_id] -> Read
@@ -523,7 +526,7 @@ class BamProcessor:
         contig_read_positions = {}
         contig_lengths = {}
 
-        print_info("BamProcessor", "grouping reads by reference genome")
+        logger.info("Grouping reads by reference genome.")
         # group by reference genome
         # for contigs, this will group all contigs together by species
         for ref in sorted(lengths):
@@ -578,8 +581,8 @@ class BamProcessor:
             out_bam : str
                 Location to store the merged bam file.
         """
-        print_info("BamProcessor", "merging bam_files {}".format(bam_files))
-        print_info("BamProcessor", "keeping reads with highest alignment score")
+        logger.info("Merging BAM files %s.", ", ".join(bam_files))
+        logger.info("Keeping reads with highest alignment score.")
         # bam header: SN => LN
         seq_len = {}
         # read_id => best_score
@@ -611,7 +614,7 @@ class BamProcessor:
 
         seq_names = sorted(seq_len.keys())
 
-        print_info("BamProcessor", "writing merged file {}".format(out_bam))
+        logger.info("Writing merged file '%s'.", out_bam)
         out = pysam.AlignmentFile(out_bam, self.write_mode, header=header)
         for bam_file in bam_files:
             inf = pysam.AlignmentFile(bam_file, self.read_mode)
@@ -647,7 +650,7 @@ class BamProcessor:
                     out.write(out_aln)
             inf.close()
         out.close()
-        print_info("BamProcessor", "finished writing {}".format(out_bam))
+        logger.info("Finished writing '%s'.", out_bam)
 
 
 class CoverageMap:
