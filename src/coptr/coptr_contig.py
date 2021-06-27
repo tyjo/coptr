@@ -3,6 +3,7 @@ coptr_contig.py
 ======================
 Estimate peak-to-trough ratios from assemblies.
 """
+import sys
 
 """
 This file is part of CoPTR.
@@ -21,6 +22,7 @@ You should have received a copy of the GNU General Public License
 along with CoPTR.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import logging
 import multiprocessing as mp
 import os.path
 import pickle as pkl
@@ -30,7 +32,9 @@ import scipy.special
 import scipy.stats
 
 from .poisson_pca import PoissonPCA
-from .print import print_error, print_info
+
+
+logger = logging.getLogger(__name__)
 
 
 class CoPTRContigEstimate:
@@ -138,7 +142,6 @@ class CoPTRContig:
         A = []
 
         # find all common contig ids
-        contig_id_list = [cm.contig_ids for cm in coverage_maps]
         contig_ids = coverage_maps[0].contig_ids
         ref_genome = coverage_maps[0].genome_id
 
@@ -148,13 +151,13 @@ class CoPTRContig:
             for contig_id in sorted(contig_ids):
 
                 if contig_id not in cm.contig_ids:
-                    print_error(
-                        "CoPTRContig",
-                        "missing contig {} from {} in {}".format(
-                            contig_id, ref_genome, cm.sample_id
-                        ),
-                        quit=True,
+                    logger.critical(
+                        "Missing contig %s from %s in %s",
+                        contig_id,
+                        ref_genome,
+                        cm.sample_id,
                     )
+                    sys.exit(1)
 
                 length = cm.get_length(contig_id)
                 if length < 11000:
@@ -401,7 +404,7 @@ class CoPTRContig:
         else:
             tmp = None
 
-        print_info("CoPTRContig", "running {}".format(genome_id))
+        logger.info("Running %s.", genome_id)
 
         A = np.array(A_filtered).T
 
@@ -464,7 +467,7 @@ class CoPTRContig:
                 bc = np.flip(bc)
             binned_counts.append(bc)
 
-        print_info("CoPTRContig", "finished {}".format(genome_id))
+        logger.info("Finished %s.", genome_id)
 
         if return_bins:
             return estimates, parameters, binned_counts
@@ -619,7 +622,7 @@ def estimate_ptrs_coptr_contig(
             A dictionary with key reference genome id and value
             a list of CoPTRContigEstimate for that reference genome.
     """
-    print_info("CoPTRContig", "checking reference genomes")
+    logger.info("Checking reference genomes.")
     coptr_contig_estimates = {}
     coptr_contig = CoPTRContig(min_reads, min_samples)
 
