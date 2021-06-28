@@ -59,13 +59,13 @@ Indexing the reference database
 .. code-block:: text
 
     $ coptr index example-data/ref-db example-data/ref-db/example-index
-    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: found 2 files totaling 0.006 Gb
-    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: copying to fasta files to coptr-fna-1599775601.629647.fna with prepended genome ids (filenames)
-    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: writing 2 reference genome ids to example-data/ref-db/example-index.genomes
-    [INFO] (Sep 10, 2020 18:06:41) ReadMapper: bowtie2-build coptr-fna-1599775601.629647.fna example-data/ref-db/example-index --noref --threads 1
+    [INFO] [Jun 28, 2021 15:46:57] [coptr.read_mapper] Found 2 files totaling 0.00611 GB.
+    [INFO] [Jun 28, 2021 15:46:57] [coptr.read_mapper] Copying FASTA files to coptr-fna-2021-06-28T19:46:57+00:00.fna with prepended genome ids (filenames).
+    [INFO] [Jun 28, 2021 15:46:57] [coptr.read_mapper] Writing 2 reference genome ids to example-data/ref-db/example-index.genomes.
+    [INFO] [Jun 28, 2021 15:46:57] [coptr.read_mapper] bowtie2-build coptr-fna-2021-06-28T19:46:57+00:00.fna example-data/ref-db/example-index --threads 1
     ...bowtie2 output...
-    [INFO] (Sep 10, 2020 18:06:44) ReadMapper: indexed 2 fasta files for reference database.
-    [INFO] (Sep 10, 2020 18:06:44) ReadMapper: cleaning up coptr-fna-1599775601.629647.fna
+    [INFO] [Jun 28, 2021 15:47:00] [coptr.read_mapper] Indexed 2 FASTA files for the reference database.
+    [INFO] [Jun 28, 2021 15:47:00] [coptr.read_mapper] Cleaning up coptr-fna-2021-06-28T19:46:57+00:00.fna.
 
 
 
@@ -100,13 +100,13 @@ Indexing a database of fasta files can be accomplished by calling
                             control memory usage.
 
 It takes two arguments. The first ``ref-fasta`` is either a folder containing
-fasta for the database. If it is a folder, coPTR will scan the folder for
+fasta for the database. If it is a folder, CoPTR will scan the folder for
 all files ending in ``.fasta``, ``.fna``, or ``.fa``. CoPTR will combine these
 into a single fasta file, prepending the filename to each sequence id in order
-to track contigs from the same reference genome. It then calls the ```bowtie2-build```
+to track contigs from the same reference genome. It then calls the ``bowtie2-build``
 to index this file.
 
-coPTR additionally outputs an ```index_name.genomes``` file with a list of ids for each
+coPTR additionally outputs an ``index_name.genomes`` file with a list of ids for each
 reference genome.
 
 Notes on memory usage
@@ -123,19 +123,19 @@ Mapping reads
 .. code-block:: text
 
     $ coptr map example-data/ref-db/example-index example-data/fastq example-data/bam
-    [INFO] (Aug 31, 2020 12:12:10) ReadMapper: mapping example-data/fastq/ERR969281.fastq.gz to example-data/bam/ERR969281.sam
-    [INFO] (Aug 31, 2020 12:12:10) ReadMapper: bowtie2 -x example-data/ref-db/example-index example-data/fastq/ERR969281.fastq.gz --no-unal -p 1
+    [INFO] [Jun 28, 2021 15:48:26] [coptr.read_mapper] Mapping example-data/fastq to example-data/bam/ERR969281.sam
+    [INFO] [Jun 28, 2021 15:48:26] [coptr.read_mapper] bowtie2 -x example-data/ref-db/example-index example-data/fastq/ERR969281.fastq.gz --no-unal -p 1 -k 10
     10818 reads; of these:
       10818 (100.00%) were unpaired; of these:
         4071 (37.63%) aligned 0 times
         6709 (62.02%) aligned exactly 1 time
         38 (0.35%) aligned >1 times
     62.37% overall alignment rate
-    [INFO] (Aug 31, 2020 12:12:11) ReadMapper: converting example-data/bam/ERR969281.sam to example-data/bam/ERR969281.bam
-    [INFO] (Aug 31, 2020 12:12:11) ReadMapper: cleaning up example-data/bam/ERR969281.sam
+    [INFO] [Jun 28, 2021 15:48:27] [coptr.read_mapper] Converting example-data/bam/ERR969281.sam to example-data/bam/ERR969281.bam.
+    [INFO] [Jun 28, 2021 15:48:27] [coptr.read_mapper] Cleaning up example-data/bam/ERR969281.sam.
     ....
-    [INFO] (Aug 31, 2020 12:12:24) ReadMapper: converting example-data/bam/ERR969285.sam to example-data/bam/ERR969285.bam
-    [INFO] (Aug 31, 2020 12:12:24) ReadMapper: cleaning up example-data/bam/ERR969285.sam
+    [INFO] [Jun 28, 2021 15:48:40] [coptr.read_mapper] Converting example-data/bam/ERR969430.sam to example-data/bam/ERR969430.bam.
+    [INFO] [Jun 28, 2021 15:48:40] [coptr.read_mapper] Cleaning up example-data/bam/ERR969430.sam.
 
 
 Once you have indexed a reference database. You can then map reads against
@@ -197,12 +197,12 @@ Computing coverage maps
 .. code-block:: text
 
     $ coptr extract example-data/bam example-data/coverage-maps
-    [INFO] (Jan 18, 2021 10:31:43) BamProcessor: processing example-data/bam/ERR969281.bam
-    [INFO] (Jan 18, 2021 10:31:43) BamProcessor: determining reference genomes
-    [INFO] (Jan 18, 2021 10:31:43) BamProcessor: collecting multi-mapped reads
-    [INFO] (Jan 18, 2021 10:31:43) BamProcessor: grouping reads by reference genome
+    [INFO] [Jun 28, 2021 15:49:48] [coptr.bam_processor] Processing example-data/bam/ERR969281.bam.
+    [INFO] [Jun 28, 2021 15:49:48] [coptr.bam_processor] Determining reference genomes.
+    [INFO] [Jun 28, 2021 15:49:48] [coptr.bam_processor] Collecting multi-mapped reads.
+    [INFO] [Jun 28, 2021 15:49:48] [coptr.bam_processor] Grouping reads by reference genome.
     ...
-    [INFO] (Aug 31, 2020 12:13:56) BamProcessor: found 190 reference sequences corresponding to 2 genomes
+    [INFO] [Jun 28, 2021 15:50:00] [coptr.cli] Found 190 reference sequences corresponding to 2 genomes.
 
 Once reads have been mapped, the next step is to compute the coverage along
 each reference genome. In this step, starting positions of each read are
@@ -251,28 +251,28 @@ Estimating PTRs
 
 .. code-block:: text
 
-    # coptr estimate example-data/coverage-maps out --min-reads 2500
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR: grouping reads by reference genome
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR: saving to example-data/coverage-maps/coverage-maps-genome
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969281.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969282.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969283.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969285.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969286.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969428.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969429.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR:   processing ERR969430.cm.pkl
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR: done grouping by reference genome
-    [INFO] (Jan 18, 2021 10:36:05) CoPTR: the --restart flag can be used to start from here
-    [INFO] (Jan 18, 2021 10:36:05) CoPTRRef: checking reference genomes
-    [INFO] (Jan 18, 2021 10:36:15) CoPTRRef: running l-gasseri-ref
-    [INFO] (Jan 18, 2021 10:36:16) CoPTRRef: finished l-gasseri-ref
-    [INFO] (Jan 18, 2021 10:36:16) CoPTRContig: checking reference genomes
-    [INFO] (Jan 18, 2021 10:36:16) CoPTRContig: running e-coli-mag
-    [INFO] (Jan 18, 2021 10:36:16) CoPTRContig: finished e-coli-mag
-    [INFO] (Jan 18, 2021 10:36:16) CoPTR: writing out.csv
-    [INFO] (Jan 18, 2021 10:36:16) CoPTR: done!
-    [INFO] (Jan 18, 2021 10:36:16) CoPTR: you may remove the folder example-data/coverage-maps/coverage-maps-genome
+    $ coptr estimate example-data/coverage-maps out --min-reads 2500
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli] Grouping reads by reference genome.
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli] Saving to example-data/coverage-maps/coverage-maps-genome:
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969281.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969282.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969283.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969285.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969286.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969428.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969429.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli]  ERR969430.cm.pkl
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli] Grouping by reference genome: Complete.
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.cli] The --restart flag can be used to start from here.
+    [INFO] [Jun 28, 2021 15:50:15] [coptr.coptr_ref] Checking reference genomes.
+    [INFO] [Jun 28, 2021 15:50:24] [coptr.coptr_ref] Running l-gasseri-ref.
+    [INFO] [Jun 28, 2021 15:50:25] [coptr.coptr_ref] Finished l-gasseri-ref.
+    [INFO] [Jun 28, 2021 15:50:25] [coptr.coptr_contig] Checking reference genomes.
+    [INFO] [Jun 28, 2021 15:50:25] [coptr.coptr_contig] Running e-coli-mag.
+    [INFO] [Jun 28, 2021 15:50:25] [coptr.coptr_contig] Finished e-coli-mag.
+    [INFO] [Jun 28, 2021 15:50:25] [coptr.cli] Writing out.csv.
+    [INFO] [Jun 28, 2021 15:50:25] [coptr.cli] Done.
+    [INFO] [Jun 28, 2021 15:50:25] [coptr.cli] You may now remove the folder example-data/coverage-maps/coverage-maps-genome.
 
 The final stage is to estimate PTR ratios from coverage maps. This is accomplished
 with the ``estimate`` command. **It is strongly recommended that you perform this step
