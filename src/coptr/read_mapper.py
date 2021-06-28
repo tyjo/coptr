@@ -91,7 +91,7 @@ class ReadMapper:
         genomes = Path(f"{index_out}.genomes")
 
         logger.info(
-            "Copying FASTA files to '%s' with prepended genome ids (filenames).",
+            "Copying FASTA files to %s with prepended genome ids (filenames).",
             str(sequence_collection),
         )
 
@@ -113,7 +113,7 @@ class ReadMapper:
                             line = f">{fname}|{line[1:]}"
                         out_handle.write(line)
 
-        logger.info("writing %d reference genome ids to '%s'.", n_genomes, str(genomes))
+        logger.info("Writing %d reference genome ids to %s.", n_genomes, str(genomes))
         call = [
             "bowtie2-build",
             str(sequence_collection),
@@ -138,7 +138,7 @@ class ReadMapper:
             logger.error("An error occurred while indexing with bowtie2.")
             logger.info("Detailed information:", exc_info=error)
         finally:
-            logger.info("Cleaning up '%s'.", str(sequence_collection))
+            logger.info("Cleaning up %s.", str(sequence_collection))
             sequence_collection.unlink()
 
     def map(self, index, inputf, outfolder, paired, threads, bt2_k):
@@ -164,7 +164,7 @@ class ReadMapper:
 
         outfolder = Path(outfolder)
         if not outfolder.is_dir():
-            logger.error("The output directory '%s' does not exist.", str(outfolder))
+            logger.error("The output directory %s does not exist.", str(outfolder))
 
         if os.path.isfile(inputf):
             bn = os.path.basename(inputf)
@@ -173,7 +173,7 @@ class ReadMapper:
             out_bam = outfolder / f"{bn}.bam"
 
             # first map to a sam file with bowtie2
-            logger.info("Mapping '%s' to '%s'".format(inputf, str(out_sam)))
+            logger.info("Mapping {} to {}".format(inputf, str(out_sam)))
             call = [
                 "bowtie2",
                 "-x",
@@ -185,12 +185,12 @@ class ReadMapper:
                 "-k",
                 bt2_k,
             ]
-            logger.debug(" ".join(call))
+            logger.info(" ".join(call))
             with out_sam.open("w") as out:
                 sub.check_call(call, stdout=out)
 
             # then convert to a bam file
-            logger.info("Converting '%s' to '%s'.".format(str(out_sam), str(out_bam)))
+            logger.info("Converting {} to {}.".format(str(out_sam), str(out_bam)))
             infile = pysam.AlignmentFile(out_sam, "r")
             outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
             try:
@@ -201,7 +201,7 @@ class ReadMapper:
                 outfile.close()
 
             # now remove sam file
-            logger.info("Cleaning up '%s'.", str(out_sam))
+            logger.info("Cleaning up {}.", str(out_sam))
             out_sam.unlink()
 
         # single end sequencing
@@ -223,7 +223,7 @@ class ReadMapper:
                     out_bam = outfolder / f"{get_fastq_name(bn)}.bam"
 
                     # map reads with bowtie2
-                    logger.info("Mapping '%s' to '%s'".format(inputf, str(out_sam)))
+                    logger.info("Mapping {} to {}".format(inputf, str(out_sam)))
                     call = [
                         "bowtie2",
                         "-x",
@@ -235,13 +235,13 @@ class ReadMapper:
                         "-k",
                         bt2_k,
                     ]
-                    logger.debug(" ".join(call))
+                    logger.info(" ".join(call))
                     with out_sam.open("w") as out:
                         sub.check_call(call, stdout=out)
 
                     # then convert to a bam file
                     logger.info(
-                        "Converting '%s' to '%s'.".format(str(out_sam), str(out_bam))
+                        "Converting {} to {}.".format(str(out_sam), str(out_bam))
                     )
                     infile = pysam.AlignmentFile(out_sam, "r")
                     outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
@@ -253,7 +253,7 @@ class ReadMapper:
                         outfile.close()
 
                     # now remove sam file
-                    logger.info("Cleaning up '%s'.", str(out_sam))
+                    logger.info("Cleaning up %s.", str(out_sam))
                     out_sam.unlink()
 
         # paired end sequencing
@@ -292,7 +292,7 @@ class ReadMapper:
                 out_bam = outfolder / f"{get_fastq_name(bn)}.bam"
 
                 # map reads with bowtie2
-                logger.info("Mapping '%s' to '%s'".format(inputf, str(out_sam)))
+                logger.info("Mapping {} to {}".format(inputf, str(out_sam)))
                 call = [
                     "bowtie2",
                     "-x",
@@ -307,13 +307,13 @@ class ReadMapper:
                     "-k",
                     bt2_k,
                 ]
-                logger.debug(" ".join(call))
+                logger.info(" ".join(call))
                 with out_sam.open("w") as out:
                     sub.check_call(call, stdout=out)
 
                 # then convert to a bam file
                 logger.info(
-                    "Converting '%s' to '%s'.".format(str(out_sam), str(out_bam))
+                    "Converting {} to {}.".format(str(out_sam), str(out_bam))
                 )
                 infile = pysam.AlignmentFile(out_sam, "r")
                 outfile = pysam.AlignmentFile(out_bam, "wb", template=infile)
@@ -325,7 +325,7 @@ class ReadMapper:
                     outfile.close()
 
                 # now remove sam file
-                logger.info("Cleaning up '%s'.", str(out_sam))
+                logger.info("Cleaning up %s.", str(out_sam))
                 out_sam.unlink()
 
         else:

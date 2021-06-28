@@ -229,7 +229,7 @@ command: index            create a bowtie2 index for a reference database
                 if os.path.isfile(
                     os.path.join(args.out_folder, get_fastq_name(f) + ".cm.pkl")
                 ):
-                    logger.info("Output for '%s' already found, skipping.", fname)
+                    logger.info("Output for %s already found, skipping.", fname)
                     continue
 
                 # don't process the rest of the bam file if we just want to
@@ -313,13 +313,13 @@ command: index            create a bowtie2 index for a reference database
             os.mkdir(grouped_coverage_map_folder)
 
         if args.restart:
-            logger.info("Restarting from files in '%s'.", grouped_coverage_map_folder)
+            logger.info("Restarting from files in %s.", grouped_coverage_map_folder)
             for cm_file in sorted(os.listdir(grouped_coverage_map_folder)):
                 _, ext = os.path.splitext(cm_file)
                 if ext != ".pkl":
                     continue
 
-                logger.info("Checking '%s'.", cm_file)
+                logger.info("Checking %s.", cm_file)
                 with open(
                     os.path.join(grouped_coverage_map_folder, cm_file), "rb"
                 ) as f:
@@ -337,7 +337,7 @@ command: index            create a bowtie2 index for a reference database
 
         else:
             logger.info("Grouping reads by reference genome.")
-            logger.info("Saving to '%s':", grouped_coverage_map_folder)
+            logger.info("Saving to %s:", grouped_coverage_map_folder)
 
             # first construct a list of genome_ids for ptr estimates
             for f in sorted(os.listdir(args.coverage_map_folder)):
@@ -404,7 +404,7 @@ command: index            create a bowtie2 index for a reference database
         if ext != ".csv":
             out_file += ".csv"
 
-        logger.info("Writing '%s'.", out_file)
+        logger.info("Writing %s.", out_file)
 
         with open(out_file, "w") as f:
             # write the header
@@ -440,7 +440,7 @@ command: index            create a bowtie2 index for a reference database
                 f.write(",".join(row) + "\n")
 
         logger.info("Done.")
-        logger.info("You may now remove the folder '%s'.", grouped_coverage_map_folder)
+        logger.info("You may now remove the folder %s.", grouped_coverage_map_folder)
 
     def count(self):
         parser = argparse.ArgumentParser(
@@ -482,7 +482,7 @@ command: index            create a bowtie2 index for a reference database
         if ext != ".csv":
             out_file += ".csv"
 
-        logger.info("Writing '%s'.", out_file)
+        logger.info("Writing %s.", out_file)
 
         with open(out_file, "w") as f:
             # write the header
@@ -549,7 +549,7 @@ command: index            create a bowtie2 index for a reference database
         if ext != ".csv":
             out_file += ".csv"
 
-        logger.info("Writing '%s'.", out_file)
+        logger.info("Writing %s.", out_file)
 
         with open(out_file, "w") as f:
             # write the header
@@ -573,5 +573,9 @@ command: index            create a bowtie2 index for a reference database
 
 def cli():
     """Serve as an entry point for command line calls."""
-    logging.basicConfig(level="INFO", format="[%(levelname)s] [%(name)s] %(message)s")
+    logging.basicConfig(
+        level="INFO",
+        format="[%(levelname)s] [%(asctime)s] [%(name)s] %(message)s",
+        datefmt="%b %d, %Y %H:%M:%S",
+    )
     ProgramOptions()

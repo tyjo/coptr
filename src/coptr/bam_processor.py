@@ -501,7 +501,7 @@ class BamProcessor:
                 A dictionary whose key is a reference genome id,
                 and value is a CoverageMap.
         """
-        logger.info("Processing '%s'.", bam_file)
+        logger.info("Processing %s.", bam_file)
 
         # extract read positions
         # reads : dict[query_seq_id] -> Read
@@ -614,7 +614,7 @@ class BamProcessor:
 
         seq_names = sorted(seq_len.keys())
 
-        logger.info("Writing merged file '%s'.", out_bam)
+        logger.info("Writing merged file %s.", out_bam)
         out = pysam.AlignmentFile(out_bam, self.write_mode, header=header)
         for bam_file in bam_files:
             inf = pysam.AlignmentFile(bam_file, self.read_mode)
@@ -650,7 +650,7 @@ class BamProcessor:
                     out.write(out_aln)
             inf.close()
         out.close()
-        logger.info("Finished writing '%s'.", out_bam)
+        logger.info("Finished writing %s.", out_bam)
 
 
 class CoverageMap:
