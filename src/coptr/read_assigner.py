@@ -114,7 +114,7 @@ class ReadAssigner(object):
 
         logger.debug("Iteration: %d; elbo: %.3G", it, elbo)
 
-    def assign_reads(self, verbose=False):
+    def assign_reads(self):
         """Compute read assignments.
 
         Return
@@ -123,7 +123,7 @@ class ReadAssigner(object):
                 A 1D array. Each entry gives a genome id that is
                 the genome assignment for each read.
         """
-        self.run_vi(verbose=verbose)
+        self.run_vi()
         self.phi = csr_matrix(self.phi)
         assignments = []
         for i in range(self.nreads):
