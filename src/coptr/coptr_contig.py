@@ -413,7 +413,16 @@ class CoPTRContig:
         keep_rows = np.sum(np.isnan(A), axis=1) < 0.025 * A.shape[1]
         A = A[keep_rows, :]
 
-        if keep_rows.sum() < 0.5 * keep_rows.size:
+        ppca_failed = False
+        try:
+            if keep_rows.sum() >= 0.5 * keep_rows.size:
+                poisson_pca = PoissonPCA()
+                W, V = poisson_pca.pca(A, k=1)
+        except:
+            ppca_failed = True
+            logger.warn("PoissonPCA failed for assembly " + genome_ids[0])
+
+        if keep_rows.sum() < 0.5 * keep_rows.size or ppca_failed:
             for j, col in enumerate(A.T):
                 reads = col[np.isfinite(col)].sum()
                 frac_nonzero = (col[np.isfinite(col)] > 0).sum() / col[
@@ -436,8 +445,6 @@ class CoPTRContig:
             else:
                 return estimates
 
-        poisson_pca = PoissonPCA()
-        W, V = poisson_pca.pca(A, k=1)
         sorted_idx = np.argsort(W.flatten())
         A = A[sorted_idx, :]
 
