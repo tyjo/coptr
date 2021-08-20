@@ -3,8 +3,6 @@ coptr_contig.py
 ======================
 Estimate peak-to-trough ratios from assemblies.
 """
-import sys
-
 
 """
 This file is part of CoPTR.
@@ -27,6 +25,8 @@ import logging
 import multiprocessing as mp
 import os.path
 import pickle as pkl
+import struct
+import sys
 
 import numpy as np
 import scipy.special
@@ -604,7 +604,6 @@ def estimate_ptrs_coptr_contig(
     grouped_coverage_map_folder,
     min_reads,
     min_samples,
-    threads,
     plot_folder=None,
 ):
     """Estimate Peak-to-Trough ratios across samples.
@@ -634,46 +633,22 @@ def estimate_ptrs_coptr_contig(
     coptr_contig_estimates = {}
     coptr_contig = CoPTRContig(min_reads, min_samples)
 
-    if threads == 1:
-        for ref_id in sorted(assembly_genome_ids):
-            with open(
-                os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb"
-            ) as f:
-                coverage_maps = load_coverage_maps(f, ref_id)
+    for ref_id in sorted(assembly_genome_ids):
+        with open(
+            os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb"
+        ) as f:
+            coverage_maps = load_coverage_maps(f, ref_id)
 
-            if plot_folder is not None:
-                estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(
-                    coverage_maps, return_bins=True
-                )
-                plot_fit(
-                    estimates, parameters, coverage_maps, reordered_bins, plot_folder
-                )
-            else:
-                estimates = coptr_contig.estimate_ptrs(coverage_maps)
+        if plot_folder is not None:
+            estimates, parameters, reordered_bins = coptr_contig.estimate_ptrs(
+                coverage_maps, return_bins=True
+            )
+            plot_fit(
+                estimates, parameters, coverage_maps, reordered_bins, plot_folder
+            )
+        else:
+            estimates = coptr_contig.estimate_ptrs(coverage_maps)
 
-            coptr_contig_estimates[ref_id] = estimates
-
-    else:
-        # workers for multiprocessing
-        pool = mp.Pool(threads)
-        coverage_maps = {}
-
-        for i, ref_id in enumerate(sorted(assembly_genome_ids)):
-            with open(
-                os.path.join(grouped_coverage_map_folder, ref_id + ".cm.pkl"), "rb"
-            ) as f:
-                coverage_maps[ref_id] = load_coverage_maps(f, ref_id)
-
-            if (i % threads == 0 and i > 0) or i == len(assembly_genome_ids) - 1:
-                flat_coverage_maps = [
-                    (ref_id, coverage_maps[ref_id], plot_folder)
-                    for ref_id in coverage_maps
-                ]
-                flat_results = pool.map(
-                    coptr_contig._parallel_helper, flat_coverage_maps
-                )
-                coptr_contig_estimates.update(dict(flat_results))
-
-                coverage_maps = {}
+        coptr_contig_estimates[ref_id] = estimates
 
     return coptr_contig_estimates

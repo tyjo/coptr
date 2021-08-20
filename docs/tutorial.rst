@@ -296,7 +296,6 @@ on all samples at once.**
       --min-samples MIN_SAMPLES
                             CoPTRContig only. Minimum number of samples required
                             to reorder bins (default 5).
-      --threads THREADS     Number of threads to use (default 1).
 
 This combines all coverage maps by species, then estimates PTRs for each species.
 We have tried to set sensible default parameters for PTR estimatation. We set

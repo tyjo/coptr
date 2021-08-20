@@ -282,12 +282,6 @@ command: index            create a bowtie2 index for a reference database
             default=5,
         )
         parser.add_argument(
-            "--threads",
-            type=int,
-            help="Number of threads to use (default 1).",
-            default=1,
-        )
-        parser.add_argument(
             "--plot", default=None, help="Plot model fit and save the results."
         )
         parser.add_argument(
@@ -387,7 +381,6 @@ command: index            create a bowtie2 index for a reference database
             grouped_coverage_map_folder,
             args.min_reads,
             args.min_cov,
-            threads=args.threads,
             plot_folder=args.plot,
         )
         results_contig = estimate_ptrs_coptr_contig(
@@ -395,7 +388,6 @@ command: index            create a bowtie2 index for a reference database
             grouped_coverage_map_folder,
             args.min_reads,
             args.min_samples,
-            threads=args.threads,
             plot_folder=args.plot,
         )
 
