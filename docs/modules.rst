@@ -13,9 +13,6 @@ Modules
 .. automodule:: src.coptr.poisson_pca
    :members:
 
-.. automodule:: src.coptr.print
-   :members:
-
 .. automodule:: src.coptr.read_mapper
    :members:
 

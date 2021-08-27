@@ -282,20 +282,19 @@ on all samples at once.**
 
     usage: coptr estimate [-h] [--min-reads MIN_READS] [--min-cov MIN_COV] [--threads THREADS] coverage-map-folder out-file
 
-    positional arguments:
-      coverage_map_folder   Folder with coverage maps computed from 'extract'.
-      out_file              Filename to store PTR table.
+  positional arguments:
+    coverage_map_folder   Folder with coverage maps computed from 'extract'.
+    out_file              Filename to store PTR table.
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      --min-reads MIN_READS
-                            Minimum number of reads required to compute a PTR
-                            (default 5000).
-      --min-cov MIN_COV     Fraction of nonzero 10Kb bins required to compute a
-                            PTR (default 0.75).
-      --min-samples MIN_SAMPLES
-                            CoPTRContig only. Minimum number of samples required
-                            to reorder bins (default 5).
+  optional arguments:
+    -h, --help            show this help message and exit
+    --min-reads MIN_READS
+                          Minimum number of reads required to compute a PTR (default 5000).
+    --min-cov MIN_COV     Fraction of nonzero bins required to compute a PTR (default 0.75).
+    --min-samples MIN_SAMPLES
+                          CoPTRContig only. Minimum number of samples required to reorder bins (default 5).
+    --plot PLOT           Plot model fit and save the results.
+    --restart             Restarts the estimation step using the genomes in the coverage-maps-genome folder.
 
 This combines all coverage maps by species, then estimates PTRs for each species.
 We have tried to set sensible default parameters for PTR estimatation. We set
