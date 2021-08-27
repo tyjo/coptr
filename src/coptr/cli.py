@@ -282,7 +282,10 @@ command: index            create a bowtie2 index for a reference database
             default=5,
         )
         parser.add_argument(
-            "--plot", default=None, help="Plot model fit and save the results."
+            "--plot",
+            metavar="OUTFOLDER",
+            default=None,
+            help="Plot model fit for each PTR."
         )
         parser.add_argument(
             "--restart",
