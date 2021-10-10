@@ -415,14 +415,15 @@ class CoPTRContig:
 
         ppca_failed = False
         try:
-            if keep_rows.sum() >= 0.5 * keep_rows.size:
+            if keep_rows.sum() >= self.min_samples:
                 poisson_pca = PoissonPCA()
                 W, V = poisson_pca.pca(A, k=1)
         except:
             ppca_failed = True
             logger.warn("PoissonPCA failed for assembly " + genome_ids[0])
 
-        if keep_rows.sum() < 0.5 * keep_rows.size or ppca_failed:
+
+        if keep_rows.sum() < self.min_samples or ppca_failed:
             for j, col in enumerate(A.T):
                 reads = col[np.isfinite(col)].sum()
                 frac_nonzero = (col[np.isfinite(col)] > 0).sum() / col[
