@@ -201,7 +201,7 @@ class ReadMapper:
                 outfile.close()
 
             # now remove sam file
-            logger.info("Cleaning up {}.", str(out_sam))
+            logger.info("Cleaning up %s.", str(out_sam))
             out_sam.unlink()
 
         # single end sequencing
