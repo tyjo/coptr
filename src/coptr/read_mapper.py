@@ -277,9 +277,9 @@ class ReadMapper:
                 f_split = f.split("_")
                 if f_split[0] not in read_pairs:
                     read_pairs[f_split[0]] = [f]
-                elif f_split[0] in read_pairs and f_split[1][0] == "2":
+                elif f_split[0] in read_pairs and f_split[-1][0] == "2":
                     read_pairs[f_split[0]].append(f)
-                elif f_split[0] in read_pairs and f_split[1][0] == "1":
+                elif f_split[0] in read_pairs and f_split[-1][0] == "1":
                     read_pairs[f_split[0]] = [f, read_pairs[f_split[0]][0]]
 
             # now map paired end reads
