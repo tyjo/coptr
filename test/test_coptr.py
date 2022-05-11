@@ -48,7 +48,7 @@ class TestCoPTR(unittest.TestCase):
 
             if len(coverage_map_contig) % 10 == 0:
                 coptr_contig_estimates = sorted(
-                    coptr_contig.estimate_ptrs(coverage_map_contig),
+                    coptr_contig.estimate_ptrs(coverage_map_contig)[0],
                     key=lambda e: e.bam_file,
                 )
                 coptr_contig_results += [e.estimate for e in coptr_contig_estimates]

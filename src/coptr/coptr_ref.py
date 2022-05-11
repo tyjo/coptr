@@ -415,10 +415,6 @@ class ReadFilterRef:
             remove_regions.append((remove_start, remove_end))
 
         read_positions, new_genome_length = self.remove_reads_by_region(
-            read_positions, genome_length, remove_regions
-        )
-
-        read_positions, new_genome_length = self.remove_reads_by_region(
             read_positions, genome_length, remove_regions, coord_map
         )
 

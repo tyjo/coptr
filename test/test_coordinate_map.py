@@ -15,7 +15,8 @@ class TestCoordinateMap(unittest.TestCase):
         genome_length = 10
         regions = [(0, 1)]
 
-        read_positions, new_genome_length = rf.remove_reads_by_region(read_positions, genome_length, regions)
+        coord_map = CoordinateMap()
+        read_positions, new_genome_length = rf.remove_reads_by_region(read_positions, genome_length, regions, coord_map)
 
         coord_map = CoordinateMap()
         coord_map.update_break_points(regions[0][1], regions[0][1] - regions[0][0])
@@ -37,11 +38,12 @@ class TestCoordinateMap(unittest.TestCase):
         genome_length = 100
         regions = [(1, 5), (25, 27), (30, 45), (60, 67), (83, 89)]
 
-        new_read_positions, new_genome_length = rf.remove_reads_by_region(read_positions, genome_length, regions)
+        coord_map = CoordinateMap()
+        new_read_positions, new_genome_length = rf.remove_reads_by_region(read_positions, genome_length, regions, coord_map)
         self.assertTrue(new_read_positions.size == read_positions.size)
 
         for i,filtered_coord in enumerate(new_read_positions):
-            unfiltered_coord = rf.coord_map.translate(filtered_coord)
+            unfiltered_coord = coord_map.translate(filtered_coord)
             self.assertTrue(unfiltered_coord == coordinates[i])
 
 
